@@ -73,7 +73,6 @@
 
     <section id="page1" class="page" style="display:block;">
         <h1>Daily Attendance List - <span id="currentDate"></span></h1>
-        <p style="color: #666; font-size: 0.9em;">* Users can set/edit wages for <b>today</b> only. To modify past records, contact Admin.</p>
         <div id="attendanceContainer">
             <table id="attendanceTable">
                 <thead>
@@ -142,7 +141,7 @@
         </div>
 
         <div class="admin-form">
-            <h3>Manual Attendance/Wage Correction (Admin Only)</h3>
+            <h3>Attendance/Wage Correction</h3>
             <select id="adminManualEmp">
                 <option value="">Select Employee</option>
             </select>
@@ -151,6 +150,7 @@
             <select id="adminManualStatus">
                 <option value="Present">Present</option>
                 <option value="Absent">Absent</option>
+                <option value="Leave">Leave</option>
             </select>
             <button class="btn-add" style="background:#2980b9" onclick="adminManualEntry()">Update History</button>
         </div>
