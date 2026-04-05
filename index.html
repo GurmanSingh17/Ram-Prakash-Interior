@@ -555,6 +555,21 @@
         </div>
       </section>
       <section id="pageExpense" class="page">
+        <button
+          onclick="generateExpensePDF()"
+          style="
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+          "
+        >
+          📥 Download PDF Report
+        </button>
         <h1
           style="
             color: #2c3e50;
@@ -1349,6 +1364,102 @@
           saveToLocalStorage();
           renderExpenses();
         }
+      }
+
+      // --- PDF GENERATION FOR EXPENSES ---
+      function generateExpensePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const filter = document.getElementById("expenseMonthFilter").value;
+        if (!filter) {
+          alert("Please select a month first.");
+          return;
+        }
+
+        const [year, month] = filter.split("-");
+        const monthName = new Date(year, month - 1).toLocaleString("default", {
+          month: "long",
+        });
+
+        // Filter and sort the data
+        const filtered = expenseRecords
+          .filter((r) => r.date.startsWith(filter))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        if (filtered.length === 0) {
+          alert("No data found for the selected month.");
+          return;
+        }
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(44, 62, 80);
+        doc.text("RAM PARKASH INTERIOR", 105, 15, { align: "center" });
+
+        doc.setFontSize(14);
+        doc.text(
+          `Non-Operating Expense Report: ${monthName} ${year}`,
+          105,
+          25,
+          { align: "center" },
+        );
+
+        // Table Data Preparation
+        let totalCEO = 0,
+          totalSup = 0,
+          totalAdmin = 0;
+        const tableData = filtered.map((rec) => {
+          totalCEO += Number(rec.ceo);
+          totalSup += Number(rec.sup);
+          totalAdmin += Number(rec.adm);
+          return [
+            rec.date,
+            `Rs. ${rec.ceo}`,
+            `Rs. ${rec.sup}`,
+            `Rs. ${rec.adm}`,
+          ];
+        });
+
+        // Add Totals Row to the end of the table
+        tableData.push([
+          {
+            content: "TOTALS",
+            styles: { fontStyle: "bold", fillColor: [241, 196, 15] },
+          },
+          {
+            content: `Rs. ${totalCEO}`,
+            styles: { fontStyle: "bold", fillColor: [241, 196, 15] },
+          },
+          {
+            content: `Rs. ${totalSup}`,
+            styles: { fontStyle: "bold", fillColor: [241, 196, 15] },
+          },
+          {
+            content: `Rs. ${totalAdmin}`,
+            styles: { fontStyle: "bold", fillColor: [241, 196, 15] },
+          },
+        ]);
+
+        // Generate Table
+        doc.autoTable({
+          startY: 35,
+          head: [
+            ["Date", "CEO Expenses", "Supervisor Expenses", "Admin Expenses"],
+          ],
+          body: tableData,
+          theme: "grid",
+          headStyles: { fillColor: [44, 62, 80], halign: "center" },
+          columnStyles: {
+            0: { halign: "left" },
+            1: { halign: "right" },
+            2: { halign: "right" },
+            3: { halign: "right" },
+          },
+        });
+
+        // Save the PDF
+        doc.save(`Expense_Report_${monthName}_${year}.pdf`);
       }
 
       // --- SESSION PERSISTENCE ---
