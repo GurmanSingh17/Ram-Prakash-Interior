@@ -1074,7 +1074,13 @@
           alert("Access Denied: History is restricted to Administrators.");
           return;
         }
+
+        // Find the employee from the live cloud array
         const emp = employees.find((e) => e.id === id);
+        if (!emp) {
+          alert("Employee not found.");
+          return;
+        }
 
         if (!selectedMonth) {
           const now = new Date();
@@ -1086,7 +1092,9 @@
           month: "long",
         });
 
-        const filteredHistory = emp.attendanceHistory
+        // Safe check for attendance history
+        const history = emp.attendanceHistory || [];
+        const filteredHistory = history
           .filter((h) => {
             const d = new Date(h.date);
             return d.getFullYear() == year && d.getMonth() + 1 == month;
@@ -1102,9 +1110,9 @@
           0,
         );
 
-        // --- Payment Logic ---
-        if (!emp.payments) emp.payments = [];
-        const filteredPayments = emp.payments.filter(
+        // Safe check for payments
+        const payments = emp.payments || [];
+        const filteredPayments = payments.filter(
           (p) => p.month === selectedMonth,
         );
         const totalPaid = filteredPayments.reduce(
@@ -1129,7 +1137,7 @@
                     <div class="emp-docs" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
                         <div class="doc-item">
                             <small>Aadhar Card:</small><br>
-                            ${emp.aadhar ? `<img src="${emp.aadhar}" onclick="window.open(this.src)" style="width: 150px; border: 1px solid #ccc; border-radius: 5px;">` : "<i>No document uploaded</i>"}
+                            ${emp.aadhar ? `<img src="${emp.aadhar}" onclick="window.open(this.src)" style="width: 150px; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">` : "<i>No document uploaded</i>"}
                         </div>
                     </div>
                 </div>
@@ -1174,7 +1182,8 @@
                         </tbody>
                         <tfoot>
                             <tr style="background:#eee; font-weight:bold;">
-                                <td>TOTAL PAID:</td><td>₹${totalPaid.toLocaleString()}</td><td>BAL DUE:</td><td style="color: ${balance > 0 ? "red" : "green"}">₹${balance.toLocaleString()}</td>
+                                <td colspan="2">TOTAL PAID: ₹${totalPaid.toLocaleString()}</td>
+                                <td colspan="2" style="color: ${balance > 0 ? "red" : "green"}">BAL DUE: ₹${balance.toLocaleString()}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -1200,7 +1209,6 @@
         document.getElementById("personalPortalContent").innerHTML = content;
         showPage("page2");
       }
-
       function addPayment(empId, month) {
         const amt = document.getElementById("payAmt").value;
         const mode = document.getElementById("payMode").value;
