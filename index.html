@@ -6,6 +6,8 @@
     <title>RAM PARKASH INTERIOR - Management Portal</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <style>
       /* --- STYLING --- */
@@ -355,6 +357,7 @@
         <button onclick="showPage('page1')">Daily Attendance</button>
         <button onclick="showPage('page3')">Projects Dashboard</button>
         <button onclick="showPage('pageExpense')">Expense Tracker</button>
+        <button onclick="showPage('pageMaterials')">Materials</button>
         <button class="admin-nav" id="adminNavBtn" onclick="checkAdminAuth()">
           Admin Panel 🔒
         </button>
@@ -524,12 +527,20 @@
             <option value="">Select Employee</option>
           </select>
           <input type="date" id="adminManualDate" />
-          <input type="number" id="adminManualWage" placeholder="Wage Amount" />
           <select id="adminManualStatus">
             <option value="Present">Present</option>
             <option value="Absent">Absent</option>
             <option value="Leave">Leave</option>
           </select>
+          <label>Entry:</label>
+          <input type="time" id="adminManualEntryTime" value="09:00" />
+          <label>Exit:</label>
+          <input type="time" id="adminManualExitTime" value="18:00" />
+          <input
+            type="number"
+            id="adminManualWage"
+            placeholder="Wage Amount (₹)"
+          />
           <button
             class="btn-add"
             style="background: #2980b9"
@@ -574,6 +585,7 @@
           </table>
         </div>
       </section>
+
       <section id="pageExpense" class="page">
         <button
           onclick="generateExpensePDF()"
@@ -659,9 +671,104 @@
           </table>
         </div>
       </section>
+
+      <section id="pageMaterials" class="page">
+        <button
+          onclick="generateMaterialsPDF()"
+          style="
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+          "
+        >
+          📥 Download PDF Report
+        </button>
+        <h1>Materials Procurement Registry</h1>
+        <div
+          style="
+            background: #fdfdfd;
+            padding: 15px;
+            border: 1px solid #1abc9c;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+          "
+        >
+          <input
+            type="month"
+            id="materialsMonthFilter"
+            onchange="renderMaterials()"
+            style="padding: 8px; border: 1px solid #ccc; border-radius: 4px"
+          />
+          <button
+            onclick="addMaterialRow()"
+            style="
+              background: #27ae60;
+              color: white;
+              border: none;
+              padding: 8px 15px;
+              cursor: pointer;
+              border-radius: 4px;
+              font-weight: bold;
+            "
+          >
+            + Add New Entry
+          </button>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="font-size: 0.85em">
+            <thead>
+              <tr style="background-color: #2c3e50; color: white">
+                <th>Date</th>
+                <th>Item Name</th>
+                <th>Quantity</th>
+                <th>Project Name</th>
+                <th>Supplier Co.</th>
+                <th>Receiver Name</th>
+                <th>Amount (₹)</th>
+                <th>Bill Upload</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="materialsTableBody"></tbody>
+            <tfoot
+              id="materialsTableFoot"
+              style="background-color: #f1c40f; font-weight: bold"
+            ></tfoot>
+          </table>
+        </div>
+      </section>
     </div>
 
     <script>
+      // Firebase configuration using your specific credentials
+      const firebaseConfig = {
+        apiKey: "AIzaSyDa1felTxMnnv9N-_boLXa_MUvsHXE0ef4",
+        authDomain: "rp-interiors.firebaseapp.com",
+        projectId: "rp-interiors",
+        storageBucket: "rp-interiors.firebasestorage.app",
+        messagingSenderId: "562728158515",
+        appId: "1:562728158515:web:a4ae20094fc01797d4ea46",
+        measurementId: "G-JD2WFJEYWB",
+        databaseURL: "https://rp-interiors-default-rtdb.firebaseio.com/", // Ensure this matches your console URL
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      const database = firebase.database();
+
+      // Global data variables (now linked to the cloud)
+      let projects = [];
+      let employees = [];
+      let expenseRecords = [];
+      let materialRecords = [];
       // --- MULTI-USER AUTH CONFIG ---
       const USER_PROFILES = {
         CEO: "im@ceo!26",
@@ -690,7 +797,6 @@
         document.getElementById("globalAuthOverlay").style.display = "none";
         document.getElementById("mainAppContent").style.display = "block";
 
-        // Strictly hide Admin Panel from everyone except Administrator
         const adminBtn = document.getElementById("adminNavBtn");
         if (currentUserRole === "Administrator") {
           adminBtn.style.display = "block";
@@ -698,7 +804,9 @@
           adminBtn.style.display = "none";
         }
 
-        loadFromLocalStorage();
+        // Change THIS line from loadFromLocalStorage() to initCloudSync()
+        initCloudSync();
+
         showPage("page1");
       }
 
@@ -707,28 +815,57 @@
         window.location.reload();
       }
 
-      // --- DATA SETUP ---
-      let projects = [];
-      let employees = [];
-      let expenseRecords = [];
-
       const defaultDailyRate = 1500;
 
       // --- STORAGE LOGIC ---
+      // Redefining the function name used 21 times to now sync with the Cloud
       function saveToLocalStorage() {
-        localStorage.setItem("rp_projects", JSON.stringify(projects));
-        localStorage.setItem("rp_employees", JSON.stringify(employees));
-        localStorage.setItem("rp_expenses", JSON.stringify(expenseRecords));
+        // Use the Firebase 'database' instance to push data to the cloud
+        database
+          .ref("portalData")
+          .set({
+            projects: projects,
+            employees: employees,
+            expenseRecords: expenseRecords,
+            materialRecords: materialRecords,
+          })
+          .then(() => {
+            console.log(
+              "Real-time Sync: Data successfully saved to Firebase Cloud.",
+            );
+          })
+          .catch((error) => {
+            console.error("Cloud Sync Error: ", error);
+          });
       }
 
-      function loadFromLocalStorage() {
-        const savedProjects = localStorage.getItem("rp_projects");
-        const savedEmployees = localStorage.getItem("rp_employees");
-        const savedExpenses = localStorage.getItem("rp_expenses");
+      // This function replaces loadFromLocalStorage to enable real-time cloud sync
+      function initCloudSync() {
+        // Listen for real-time updates from your Firebase database
+        database.ref("portalData").on("value", (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            // Sync global variables with cloud data
+            projects = data.projects || [];
+            employees = data.employees || [];
+            expenseRecords = data.expenseRecords || [];
+            materialRecords = data.materialRecords || [];
 
-        if (savedProjects) projects = JSON.parse(savedProjects);
-        if (savedEmployees) employees = JSON.parse(savedEmployees);
-        if (savedExpenses) expenseRecords = JSON.parse(savedExpenses);
+            // Automatically refresh the current page view with the new data
+            const activePage = Array.from(
+              document.querySelectorAll(".page"),
+            ).find((p) => p.style.display === "block")?.id;
+            if (activePage) {
+              // Re-trigger the render functions based on the current page
+              if (activePage === "page1") renderEmployeeList();
+              if (activePage === "pageExpense") renderExpenses();
+              if (activePage === "pageMaterials") renderMaterials();
+              if (activePage === "page3") renderProjectDashboard();
+              if (activePage === "page4") renderAdminPanel();
+            }
+            console.log("Cloud Data Synced Successfully.");
+          }
+        });
       }
 
       // --- AUTH LOGIC ---
@@ -771,6 +908,7 @@
 
         if (pageId === "page1") renderEmployeeList();
         if (pageId === "pageExpense") renderExpenses();
+        if (pageId === "pageMaterials") renderMaterials();
         if (pageId === "page3") renderProjectDashboard();
         if (pageId === "page4") renderAdminPanel();
       }
@@ -781,7 +919,8 @@
         const exit = document.getElementById(`exit-${empId}`).value;
         const status = document.getElementById(`status-${empId}`).value;
 
-        if (status !== "Present" || !entry || !exit) {
+        // Change: Allow calculation if status is "Leave"
+        if ((status !== "Present" && status !== "Leave") || !entry || !exit) {
           return { dayCount: 0 };
         }
 
@@ -795,7 +934,7 @@
         if (diffHours >= 15) dayMultiplier = 2;
         else if (diffHours >= 12) dayMultiplier = 1.5;
         else if (diffHours >= 9) dayMultiplier = 1;
-        else dayMultiplier = diffHours / 9; // Prorated if less than 9h
+        else dayMultiplier = diffHours / 9;
 
         return { dayCount: dayMultiplier };
       }
@@ -1270,24 +1409,39 @@
         const rawDate = document.getElementById("adminManualDate").value;
         const wage = document.getElementById("adminManualWage").value;
         const status = document.getElementById("adminManualStatus").value;
+        const entry = document.getElementById("adminManualEntryTime").value;
+        const exit = document.getElementById("adminManualExitTime").value;
 
         if (!empId || !rawDate || !wage) {
-          alert("Please fill all fields for manual entry");
+          alert("Please fill the Employee, Date, and Wage fields.");
           return;
         }
 
         const formattedDate = new Date(rawDate).toDateString();
         const emp = employees.find((e) => e.id === empId);
 
+        // Remove existing record for that date if it exists
         emp.attendanceHistory = emp.attendanceHistory.filter(
           (h) => h.date !== formattedDate,
         );
+
+        // Calculate day count based on times
+        const startTime = new Date(`2000-01-01T${entry}`);
+        const endTime = new Date(`2000-01-01T${exit}`);
+        let diffHours = (endTime - startTime) / (1000 * 60 * 60);
+        if (diffHours < 0) diffHours += 24;
+
+        let dayMultiplier =
+          status === "Present" ? (diffHours >= 9 ? 1 : diffHours / 9) : 0;
+
+        // Add the new corrected record
         emp.attendanceHistory.push({
           date: formattedDate,
           status: status,
-          pay: status === "Present" ? parseInt(wage) : 0,
-          dayCount:
-            status === "Present" ? parseInt(wage) / defaultDailyRate : 0,
+          entry: entry,
+          exit: exit,
+          pay: parseInt(wage),
+          dayCount: dayMultiplier,
         });
 
         saveToLocalStorage();
@@ -1670,7 +1824,6 @@
         }
       }
 
-      // --- PDF GENERATION FOR EXPENSES ---
       function generateExpensePDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
@@ -1704,7 +1857,9 @@
           `Non-Operating Expense Report: ${monthName} ${year}`,
           105,
           25,
-          { align: "center" },
+          {
+            align: "center",
+          },
         );
 
         let totalCEO = 0,
@@ -1757,6 +1912,127 @@
         });
 
         doc.save(`Expense_Report_${monthName}_${year}.pdf`);
+      }
+
+      // --- MATERIALS LOGIC ---
+      function renderMaterials() {
+        const filter = document.getElementById("materialsMonthFilter").value;
+        const tbody = document.getElementById("materialsTableBody");
+        const tfoot = document.getElementById("materialsTableFoot");
+        tbody.innerHTML = "";
+
+        const filtered = materialRecords
+          .filter((r) => r.date.startsWith(filter))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+        let totalAmt = 0;
+
+        filtered.forEach((rec) => {
+          const globalIdx = materialRecords.indexOf(rec);
+          const isAdmin = currentUserRole === "Administrator";
+          const rowHasData = rec.itemName || Number(rec.amount) > 0 || rec.bill;
+          const isLocked = !isAdmin && rowHasData;
+
+          tbody.innerHTML += `
+            <tr style="background-color: white;">
+                <td><input type="date" value="${rec.date}" onchange="updateMaterial(${globalIdx}, 'date', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="text" value="${rec.itemName || ""}" onchange="updateMaterial(${globalIdx}, 'itemName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="text" value="${rec.qty || ""}" onchange="updateMaterial(${globalIdx}, 'qty', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="text" value="${rec.projectName || ""}" onchange="updateMaterial(${globalIdx}, 'projectName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="text" value="${rec.supplier || ""}" onchange="updateMaterial(${globalIdx}, 'supplier', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="text" value="${rec.receiver || ""}" onchange="updateMaterial(${globalIdx}, 'receiver', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td><input type="number" value="${rec.amount || 0}" onchange="updateMaterial(${globalIdx}, 'amount', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                <td>
+                    <input type="file" onchange="uploadMaterialBill(${globalIdx}, this)" ${isLocked ? "disabled" : ""} style="font-size:0.7em">
+                    ${rec.bill ? `<br><button onclick="window.open('${rec.bill}')" style="font-size:0.8em; margin-top:2px">View Bill</button>` : ""}
+                </td>
+                <td style="text-align:center">${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : "-"}</td>
+            </tr>`;
+          totalAmt += Number(rec.amount || 0);
+        });
+
+        tfoot.innerHTML = `<tr><td colspan="6" style="text-align:right">PAGE TOTAL</td><td>₹${totalAmt.toLocaleString()}</td><td colspan="2"></td></tr>`;
+      }
+
+      function addMaterialRow() {
+        const today = new Date().toISOString().split("T")[0];
+        materialRecords.push({
+          date: today,
+          itemName: "",
+          qty: "",
+          projectName: "",
+          supplier: "",
+          receiver: "",
+          amount: 0,
+          bill: null,
+        });
+        saveToLocalStorage();
+        renderMaterials();
+      }
+
+      function updateMaterial(idx, field, val) {
+        materialRecords[idx][field] = val;
+        saveToLocalStorage();
+      }
+
+      async function uploadMaterialBill(idx, input) {
+        const file = input.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => {
+            materialRecords[idx].bill = reader.result;
+            saveToLocalStorage();
+            renderMaterials();
+          };
+        }
+      }
+
+      function deleteMaterial(idx) {
+        if (confirm("Delete this material record?")) {
+          materialRecords.splice(idx, 1);
+          saveToLocalStorage();
+          renderMaterials();
+        }
+      }
+
+      function generateMaterialsPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF("l"); // Landscape
+        const filter = document.getElementById("materialsMonthFilter").value;
+        if (!filter) return alert("Select a month");
+
+        const filtered = materialRecords.filter((r) =>
+          r.date.startsWith(filter),
+        );
+        if (filtered.length === 0) return alert("No records for this month");
+
+        doc.text(`Materials Procurement Report - ${filter}`, 14, 15);
+        const body = filtered.map((r) => [
+          r.date,
+          r.itemName,
+          r.qty,
+          r.projectName,
+          r.supplier,
+          r.receiver,
+          r.amount,
+        ]);
+        doc.autoTable({
+          startY: 20,
+          head: [
+            [
+              "Date",
+              "Item",
+              "Qty",
+              "Project",
+              "Supplier",
+              "Receiver",
+              "Amount (INR)",
+            ],
+          ],
+          body: body,
+          theme: "grid",
+        });
+        doc.save(`Materials_${filter}.pdf`);
       }
 
       window.onload = () => {
