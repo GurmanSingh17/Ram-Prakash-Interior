@@ -956,53 +956,53 @@
 
         tbody.innerHTML = employees
           .map((emp) => {
+            // FIX: Added '|| []' to prevent crashing on new employees
             const h =
-              emp.attendanceHistory.find((rec) => rec.date === today) || {};
+              (emp.attendanceHistory || []).find((rec) => rec.date === today) ||
+              {};
             const statusVal = h.status || "Present";
 
             return `
-                <tr>
-                    <td>#${emp.id}</td>
-                    <td><strong>${emp.name}</strong></td>
-                    <td>
-                        <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')">
-                            <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
-                            <option value="Absent" ${statusVal === "Absent" ? "selected" : ""}>Absent</option>
-                            <option value="Leave" ${statusVal === "Leave" ? "selected" : ""}>Leave</option>
-                        </select>
-                    </td>
-                    <td><input type="time" class="time-input" id="entry-${emp.id}" value="${h.entry || "09:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
-                    <td><input type="time" class="time-input" id="exit-${emp.id}" value="${h.exit || "18:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
-                    <td>
-                        ₹ <input type="number" 
-                                 id="manual-wage-${emp.id}" 
-                                 value="${h.pay || ""}" 
-                                 placeholder="Enter Wage"
-                                 ${h.pay && currentUserRole !== "Administrator" ? "disabled" : ""} 
-                                 style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${h.pay && currentUserRole !== "Administrator" ? "#eee" : "white"};">
-                    </td>
-                    <td>
-                        ${
-                          currentUserRole === "Administrator"
-                            ? `
-                        <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
-                            <option value="">Unassigned</option>
-                            ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
-                        </select>
-                        `
-                            : `
-                        <span>${emp.currentProject || "Unassigned"}</span>
-                        `
-                        }
-                    </td>
-                    <td>
-                        ${
-                          currentUserRole === "Administrator"
-                            ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
-                            : `<span style="color: #999; font-size: 0.8em;">Locked</span>`
-                        }
-                    </td>
-                </tr>
+                    <tr>
+                        <td>#${emp.id}</td>
+                        <td><strong>${emp.name}</strong></td>
+                        <td>
+                            <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')">
+                                <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
+                                <option value="Absent" ${statusVal === "Absent" ? "selected" : ""}>Absent</option>
+                                <option value="Leave" ${statusVal === "Leave" ? "selected" : ""}>Leave</option>
+                            </select>
+                        </td>
+                        <td><input type="time" class="time-input" id="entry-${emp.id}" value="${h.entry || "09:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
+                        <td><input type="time" class="time-input" id="exit-${emp.id}" value="${h.exit || "18:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
+                        <td>
+                            ₹ <input type="number" 
+                                    id="manual-wage-${emp.id}" 
+                                    value="${h.pay || ""}" 
+                                    placeholder="Enter Wage"
+                                    ${h.pay && currentUserRole !== "Administrator" ? "disabled" : ""} 
+                                    style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${h.pay && currentUserRole !== "Administrator" ? "#eee" : "white"};">
+                        </td>
+                        <td>
+                            ${
+                              currentUserRole === "Administrator"
+                                ? `
+                            <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
+                                <option value="">Unassigned</option>
+                                ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
+                            </select>
+                            `
+                                : `<span>${emp.currentProject || "Unassigned"}</span>`
+                            }
+                        </td>
+                        <td>
+                            ${
+                              currentUserRole === "Administrator"
+                                ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
+                                : `<span style="color: #999; font-size: 0.8em;">Locked</span>`
+                            }
+                        </td>
+                    </tr>
                 `;
           })
           .join("");
