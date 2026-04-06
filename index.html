@@ -857,7 +857,7 @@
             ).find((p) => p.style.display === "block")?.id;
             if (activePage) {
               // Re-trigger the render functions based on the current page
-              if (activePage === "page1") renderEmployeeList();
+              if (activePage === "page1") renderEmployeeList(); // Change to renderEmployees() if that's your function name
               if (activePage === "pageExpense") renderExpenses();
               if (activePage === "pageMaterials") renderMaterials();
               if (activePage === "page3") renderProjectDashboard();
