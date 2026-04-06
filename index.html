@@ -386,7 +386,7 @@
                 <th>Status</th>
                 <th>Entry Time</th>
                 <th>Exit Time</th>
-                <th>Total Wage (₹)</th>
+                <th>Manual Wage Entry (₹)</th>
                 <th>Current Project</th>
                 <th>Action</th>
               </tr>
@@ -478,11 +478,18 @@
             </button>
           </div>
 
-          <div class="admin-form">
-            <h3>Register New Employee</h3>
+          <div class="admin-form" id="employeeFormContainer">
+            <h3 id="employeeFormTitle">Register New Employee</h3>
+            <input type="hidden" id="editEmployeeOriginalId" />
+            <input type="text" id="newEmpId" placeholder="Manual Employee ID" />
             <input type="text" id="newEmpName" placeholder="Name" />
             <input type="number" id="newEmpAge" placeholder="Age" />
             <input type="text" id="newEmpContact" placeholder="Contact" />
+            <input
+              type="text"
+              id="newEmpAccount"
+              placeholder="Bank Account No."
+            />
             <div style="margin: 10px 5px; font-size: 0.9em">
               <label>Employee Photo:</label><br />
               <input
@@ -493,8 +500,20 @@
               <label>Aadhar Card Photo:</label><br />
               <input type="file" id="newEmpAadhar" accept="image/*" />
             </div>
-            <button class="btn-add" onclick="addEmployee()">
+            <button
+              class="btn-add"
+              id="employeeSubmitBtn"
+              onclick="addEmployee()"
+            >
               Add Employee
+            </button>
+            <button
+              class="btn-del"
+              id="employeeCancelBtn"
+              style="display: none"
+              onclick="cancelEmployeeEdit()"
+            >
+              Cancel Edit
             </button>
           </div>
         </div>
@@ -545,6 +564,7 @@
                 <th>Name</th>
                 <th>Age</th>
                 <th>Contact</th>
+                <th>Bank A/C</th>
                 <th>Project</th>
                 <th>Aadhar Card</th>
                 <th>Action</th>
@@ -620,13 +640,13 @@
               <tr style="background-color: #2c3e50; color: white">
                 <th style="padding: 12px; border: 1px solid #ddd">Date</th>
                 <th style="padding: 12px; border: 1px solid #ddd">
-                  CEO Expenses (₹)
+                  CEO Exp. (₹) / Rec. No.
                 </th>
                 <th style="padding: 12px; border: 1px solid #ddd">
-                  Supervisor Expenses (₹)
+                  Supervisor Exp. (₹) / Rec. No.
                 </th>
                 <th style="padding: 12px; border: 1px solid #ddd">
-                  Admin Expenses (₹)
+                  Admin Exp. (₹) / Rec. No.
                 </th>
                 <th style="padding: 12px; border: 1px solid #ddd">Action</th>
               </tr>
@@ -698,17 +718,17 @@
       function saveToLocalStorage() {
         localStorage.setItem("rp_projects", JSON.stringify(projects));
         localStorage.setItem("rp_employees", JSON.stringify(employees));
-        localStorage.setItem("rp_expenses", JSON.stringify(expenseRecords)); // <--- ADD THIS LINE
+        localStorage.setItem("rp_expenses", JSON.stringify(expenseRecords));
       }
 
       function loadFromLocalStorage() {
         const savedProjects = localStorage.getItem("rp_projects");
         const savedEmployees = localStorage.getItem("rp_employees");
-        const savedExpenses = localStorage.getItem("rp_expenses"); // <--- ADD THIS LINE
+        const savedExpenses = localStorage.getItem("rp_expenses");
 
         if (savedProjects) projects = JSON.parse(savedProjects);
         if (savedEmployees) employees = JSON.parse(savedEmployees);
-        if (savedExpenses) expenseRecords = JSON.parse(savedExpenses); // <--- ADD THIS LINE
+        if (savedExpenses) expenseRecords = JSON.parse(savedExpenses);
       }
 
       // --- AUTH LOGIC ---
@@ -750,7 +770,7 @@
         document.getElementById(pageId).style.display = "block";
 
         if (pageId === "page1") renderEmployeeList();
-        if (pageId === "pageExpense") renderExpenses(); // <--- ADD THIS LINE
+        if (pageId === "pageExpense") renderExpenses();
         if (pageId === "page3") renderProjectDashboard();
         if (pageId === "page4") renderAdminPanel();
       }
@@ -760,11 +780,9 @@
         const entry = document.getElementById(`entry-${empId}`).value;
         const exit = document.getElementById(`exit-${empId}`).value;
         const status = document.getElementById(`status-${empId}`).value;
-        const wageDisplay = document.getElementById(`wage-display-${empId}`);
 
         if (status !== "Present" || !entry || !exit) {
-          wageDisplay.innerText = "0";
-          return 0;
+          return { dayCount: 0 };
         }
 
         const startTime = new Date(`2000-01-01T${entry}`);
@@ -779,9 +797,7 @@
         else if (diffHours >= 9) dayMultiplier = 1;
         else dayMultiplier = diffHours / 9; // Prorated if less than 9h
 
-        const totalWage = Math.round(defaultDailyRate * dayMultiplier);
-        wageDisplay.innerText = totalWage;
-        return { wage: totalWage, dayCount: dayMultiplier };
+        return { dayCount: dayMultiplier };
       }
 
       // --- CORE RENDERING ---
@@ -810,29 +826,47 @@
                     <td>#${emp.id}</td>
                     <td><strong>${emp.name}</strong></td>
                     <td>
-                        <select id="status-${emp.id}" onchange="calculateDayAndWage(${emp.id})">
+                        <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')">
                             <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
                             <option value="Absent" ${statusVal === "Absent" ? "selected" : ""}>Absent</option>
                             <option value="Leave" ${statusVal === "Leave" ? "selected" : ""}>Leave</option>
                         </select>
                     </td>
-                    <td><input type="time" class="time-input" id="entry-${emp.id}" value="${h.entry || "09:00"}" onchange="calculateDayAndWage(${emp.id})"></td>
-                    <td><input type="time" class="time-input" id="exit-${emp.id}" value="${h.exit || "18:00"}" onchange="calculateDayAndWage(${emp.id})"></td>
-                    <td>₹ <span id="wage-display-${emp.id}">${h.pay || 0}</span></td>
+                    <td><input type="time" class="time-input" id="entry-${emp.id}" value="${h.entry || "09:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
+                    <td><input type="time" class="time-input" id="exit-${emp.id}" value="${h.exit || "18:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
                     <td>
-                        <select id="proj-${emp.id}">
+                        ₹ <input type="number" 
+                                 id="manual-wage-${emp.id}" 
+                                 value="${h.pay || ""}" 
+                                 placeholder="Enter Wage"
+                                 ${h.pay && currentUserRole !== "Administrator" ? "disabled" : ""} 
+                                 style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${h.pay && currentUserRole !== "Administrator" ? "#eee" : "white"};">
+                    </td>
+                    <td>
+                        ${
+                          currentUserRole === "Administrator"
+                            ? `
+                        <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
                             <option value="">Unassigned</option>
                             ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
                         </select>
+                        `
+                            : `
+                        <span>${emp.currentProject || "Unassigned"}</span>
+                        `
+                        }
                     </td>
-                    <td><button onclick="viewEmployee(${emp.id})">History</button></td>
+                    <td>
+                        ${
+                          currentUserRole === "Administrator"
+                            ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
+                            : `<span style="color: #999; font-size: 0.8em;">Locked</span>`
+                        }
+                    </td>
                 </tr>
                 `;
           })
           .join("");
-
-        // Trigger calculation for visual initial check
-        employees.forEach((e) => calculateDayAndWage(e.id));
       }
 
       function saveAttendance() {
@@ -843,7 +877,11 @@
           const exit = document.getElementById(`exit-${emp.id}`).value;
           const results = calculateDayAndWage(emp.id);
 
-          emp.currentProject = document.getElementById(`proj-${emp.id}`).value;
+          const manualWageInput = document.getElementById(
+            `manual-wage-${emp.id}`,
+          );
+          const manualWage = parseInt(manualWageInput.value) || 0;
+
           emp.attendanceHistory = emp.attendanceHistory.filter(
             (h) => h.date !== today,
           );
@@ -853,7 +891,7 @@
             status: status,
             entry: entry,
             exit: exit,
-            pay: results ? results.wage : 0,
+            pay: manualWage,
             dayCount: results ? results.dayCount : 0,
           });
         });
@@ -893,6 +931,10 @@
       }
 
       function viewEmployee(id, selectedMonth = null) {
+        if (currentUserRole !== "Administrator") {
+          alert("Access Denied: History is restricted to Administrators.");
+          return;
+        }
         const emp = employees.find((e) => e.id === id);
 
         if (!selectedMonth) {
@@ -921,13 +963,34 @@
           0,
         );
 
+        // --- Payment Logic ---
+        if (!emp.payments) emp.payments = [];
+        const filteredPayments = emp.payments.filter(
+          (p) => p.month === selectedMonth,
+        );
+        const totalPaid = filteredPayments.reduce(
+          (sum, p) => sum + (p.amount || 0),
+          0,
+        );
+        const balance = totalEarnings - totalPaid;
+
         const content = `
                 <div style="background: #ecf0f1; padding: 20px; border-radius: 8px; margin: 15px 0;">
                     <div class="profile-header">
                         <img src="${emp.photo || "https://via.placeholder.com/100"}" class="main-profile-img">
                         <div>
                             <h2>${emp.name}</h2>
+                            <p><strong>Employee ID:</strong> #${emp.id}</p>
+                            <p><strong>Age:</strong> ${emp.age || "N/A"} | <strong>Contact:</strong> ${emp.contact || "N/A"}</p>
+                            <p><strong>Bank Account No:</strong> ${emp.account || "Not provided"}</p>
+                            <p><strong>Current Project:</strong> ${emp.currentProject || "Unassigned"}</p>
                             <p><strong>Month Stats:</strong> Total Days: ${totalDays.toFixed(2)} | Total Earnings: ₹${totalEarnings.toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <div class="emp-docs" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                        <div class="doc-item">
+                            <small>Aadhar Card:</small><br>
+                            ${emp.aadhar ? `<img src="${emp.aadhar}" onclick="window.open(this.src)" style="width: 150px; border: 1px solid #ccc; border-radius: 5px;">` : "<i>No document uploaded</i>"}
                         </div>
                     </div>
                 </div>
@@ -935,12 +998,50 @@
                 <div class="report-controls">
                     <div>
                         <label><strong>Select Month:</strong> </label>
-                        <input type="month" id="reportMonth" value="${selectedMonth}" onchange="viewEmployee(${id}, this.value)">
+                        <input type="month" id="reportMonth" value="${selectedMonth}" onchange="viewEmployee('${id}', this.value)">
                     </div>
-                    <button class="btn-pdf" onclick="generatePDF(${id}, '${selectedMonth}')">📥 Download ${monthName} Report (PDF)</button>
+                    <button class="btn-pdf" onclick="generatePDF('${id}', '${selectedMonth}')">📥 Download ${monthName} Report (PDF)</button>
                 </div>
 
-                <h3>Log for ${monthName} ${year}</h3>
+                <div style="background: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 25px;">
+                    <h3>Payments Ledger - ${monthName} ${year}</h3>
+                    <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                        <input type="number" id="payAmt" placeholder="Amount Paid">
+                        <select id="payMode">
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="UPI">UPI</option>
+                        </select>
+                        <button class="btn-add" onclick="addPayment('${id}', '${selectedMonth}')">Add Payment</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Date</th><th>Amount</th><th>Mode</th><th>Action</th></tr></thead>
+                        <tbody>
+                            ${
+                              filteredPayments.length === 0
+                                ? '<tr><td colspan="4" class="empty-state">No payments recorded</td></tr>'
+                                : filteredPayments
+                                    .map(
+                                      (p, idx) => `<tr>
+                                <td>${p.date}</td>
+                                <td>₹${p.amount}</td>
+                                <td>${p.mode}</td>
+                                <td><button class="btn-del" onclick="deletePayment('${id}', '${selectedMonth}', ${idx})">Delete</button></td>
+                            </tr>`,
+                                    )
+                                    .join("")
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr style="background:#eee; font-weight:bold;">
+                                <td>TOTAL PAID:</td><td>₹${totalPaid.toLocaleString()}</td><td>BAL DUE:</td><td style="color: ${balance > 0 ? "red" : "green"}">₹${balance.toLocaleString()}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <h3>Attendance Log for ${monthName} ${year}</h3>
                 <table>
                     <thead><tr><th>Date</th><th>Status</th><th>Time In/Out</th><th>Day Count</th><th>Earnings</th></tr></thead>
                     <tbody id="historyTableBody">
@@ -961,6 +1062,33 @@
         showPage("page2");
       }
 
+      function addPayment(empId, month) {
+        const amt = document.getElementById("payAmt").value;
+        const mode = document.getElementById("payMode").value;
+        if (!amt) return alert("Enter amount");
+        const emp = employees.find((e) => e.id === empId);
+        if (!emp.payments) emp.payments = [];
+        emp.payments.push({
+          month: month,
+          date: new Date().toLocaleDateString(),
+          amount: parseInt(amt),
+          mode: mode,
+        });
+        saveToLocalStorage();
+        viewEmployee(empId, month);
+      }
+
+      function deletePayment(empId, month, idx) {
+        if (!confirm("Delete this record?")) return;
+        const emp = employees.find((e) => e.id === empId);
+        const monthPayments = emp.payments.filter((p) => p.month === month);
+        const itemToDelete = monthPayments[idx];
+        emp.payments = emp.payments.filter((p) => p !== itemToDelete);
+
+        saveToLocalStorage();
+        viewEmployee(empId, month);
+      }
+
       function generatePDF(id, monthStr) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
@@ -977,33 +1105,89 @@
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        const total = filteredHistory.reduce((sum, h) => sum + h.pay, 0);
+        const totalEarned = filteredHistory.reduce(
+          (sum, h) => sum + (h.pay || 0),
+          0,
+        );
+        const totalPaid = (emp.payments || [])
+          .filter((p) => p.month === monthStr)
+          .reduce((sum, p) => sum + p.amount, 0);
+        const balance = totalEarned - totalPaid;
 
-        doc.setFontSize(18);
+        // Header and Details
+        doc.setFontSize(22);
+        doc.setTextColor(44, 62, 80);
         doc.text("RAM PARKASH INTERIOR", 105, 15, { align: "center" });
-        doc.setFontSize(12);
-        doc.text(`Monthly Attendance Report: ${monthName} ${year}`, 105, 22, {
+        doc.setFontSize(14);
+        doc.text(`Monthly Pay Slip: ${monthName} ${year}`, 105, 22, {
           align: "center",
         });
 
+        doc.setDrawColor(26, 188, 156);
         doc.line(20, 28, 190, 28);
-        doc.text(`Employee Name: ${emp.name}`, 20, 35);
-        doc.text(`Total Earnings: INR ${total.toLocaleString()}`, 20, 42);
-        doc.line(20, 48, 190, 48);
 
+        doc.setFontSize(10);
+        doc.setTextColor(51, 51, 51);
+        doc.text(`Employee Name: ${emp.name}`, 20, 35);
+        doc.text(`Employee ID: #${emp.id}`, 20, 40);
+        doc.text(`Contact: ${emp.contact || "N/A"}`, 20, 45);
+        doc.text(`Account No: ${emp.account || "N/A"}`, 20, 50);
+
+        doc.text(
+          `Total Salary Earned: INR ${totalEarned.toLocaleString()}`,
+          130,
+          35,
+        );
+        doc.text(
+          `Total Payments Made: INR ${totalPaid.toLocaleString()}`,
+          130,
+          40,
+        );
+        doc.setFontSize(11);
+        doc.setTextColor(192, 57, 43); // Red for balance
+        doc.text(
+          `NET SETTLEMENT DUE: INR ${balance.toLocaleString()}`,
+          130,
+          48,
+        );
+
+        // Attendance Table
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        doc.text("Daily Attendance & Wages Detail", 20, 60);
         const tableData = filteredHistory.map((h) => [
           h.date,
           h.status,
           `${h.entry}/${h.exit}`,
-          `${parseFloat(h.dayCount).toFixed(2)} days`,
+          `${parseFloat(h.dayCount).toFixed(2)}`,
           `Rs. ${h.pay}`,
         ]);
         doc.autoTable({
-          startY: 55,
-          head: [["Date", "Status", "In/Out", "Days", "Earnings"]],
+          startY: 65,
+          head: [["Date", "Status", "In/Out", "Days", "Wages"]],
           body: tableData,
           theme: "striped",
+          headStyles: { fillColor: [44, 62, 80] },
         });
+
+        // Payments Table
+        const payData = (emp.payments || [])
+          .filter((p) => p.month === monthStr)
+          .map((p) => [p.date, p.mode, `Rs. ${p.amount}`]);
+        if (payData.length > 0) {
+          doc.text(
+            "Payment History (Installments)",
+            20,
+            doc.lastAutoTable.finalY + 15,
+          );
+          doc.autoTable({
+            startY: doc.lastAutoTable.finalY + 20,
+            head: [["Payment Date", "Mode", "Amount"]],
+            body: payData,
+            theme: "grid",
+            headStyles: { fillColor: [26, 188, 156] },
+          });
+        }
 
         doc.save(`${emp.name}_Report_${monthName}_${year}.pdf`);
       }
@@ -1047,7 +1231,7 @@
         const eList = document.getElementById("adminEmployeeListBody");
         eList.innerHTML =
           employees.length === 0
-            ? '<tr><td colspan="8">No employees</td></tr>'
+            ? '<tr><td colspan="9">No employees</td></tr>'
             : employees
                 .map(
                   (emp) => `
@@ -1056,14 +1240,18 @@
                     <td>
                         ${emp.photo ? `<img src="${emp.photo}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="window.open(this.src)">` : "No Photo"}
                     </td>
-                    <td><input type="text" value="${emp.name}" style="width:100px" onchange="editEmpName(${emp.id}, this.value)"></td>
+                    <td>${emp.name}</td>
                     <td>${emp.age || "-"}</td>
                     <td>${emp.contact || "-"}</td>
+                    <td>${emp.account || "-"}</td>
                     <td>${emp.currentProject || "Unassigned"}</td>
                     <td>
                         ${emp.aadhar ? `<img src="${emp.aadhar}" style="width:60px; height:40px; object-fit:contain; border:1px solid #ddd; cursor:pointer;" onclick="window.open(this.src)">` : "No Aadhar"}
                     </td>
-                    <td><button class="btn-del" onclick="deleteEmployee(${emp.id})">Remove</button></td>
+                    <td>
+                        <button class="btn-edit" onclick="editEmployee('${emp.id}')">✏️</button>
+                        <button class="btn-del" onclick="deleteEmployee('${emp.id}')">Remove</button>
+                    </td>
                 </tr>
             `,
                 )
@@ -1078,7 +1266,7 @@
       }
 
       function adminManualEntry() {
-        const empId = parseInt(document.getElementById("adminManualEmp").value);
+        const empId = document.getElementById("adminManualEmp").value;
         const rawDate = document.getElementById("adminManualDate").value;
         const wage = document.getElementById("adminManualWage").value;
         const status = document.getElementById("adminManualStatus").value;
@@ -1239,37 +1427,44 @@
       }
 
       async function addEmployee() {
+        const id = document.getElementById("newEmpId").value.trim();
         const name = document.getElementById("newEmpName").value.trim();
         const age = document.getElementById("newEmpAge").value;
         const contact = document.getElementById("newEmpContact").value;
+        const account = document.getElementById("newEmpAccount").value.trim();
         const photoFile = document.getElementById("newEmpPhoto").files[0];
         const aadharFile = document.getElementById("newEmpAadhar").files[0];
 
-        if (name && age) {
+        if (id && name && age) {
+          if (employees.some((e) => e.id === id)) {
+            alert("This Employee ID already exists. Please use a unique ID.");
+            return;
+          }
+
           let photoData = null;
           let aadharData = null;
 
           if (photoFile) photoData = await getBase64(photoFile);
           if (aadharFile) aadharData = await getBase64(aadharFile);
 
-          const newId =
-            employees.length > 0
-              ? Math.max(...employees.map((e) => e.id)) + 1
-              : 1;
           employees.push({
-            id: newId,
-            name,
+            id: id,
+            name: name,
             age: parseInt(age),
-            contact,
+            contact: contact,
+            account: account,
             photo: photoData,
             aadhar: aadharData,
             currentProject: "",
             attendanceHistory: [],
+            payments: [],
           });
 
+          document.getElementById("newEmpId").value = "";
           document.getElementById("newEmpName").value = "";
           document.getElementById("newEmpAge").value = "";
           document.getElementById("newEmpContact").value = "";
+          document.getElementById("newEmpAccount").value = "";
           document.getElementById("newEmpPhoto").value = "";
           document.getElementById("newEmpAadhar").value = "";
 
@@ -1277,8 +1472,97 @@
           renderAdminPanel();
           alert("Employee Registered Successfully!");
         } else {
-          alert("Please enter Name and Age.");
+          alert("Please enter ID, Name, and Age.");
         }
+      }
+
+      function editEmployee(id) {
+        const emp = employees.find((e) => e.id === id);
+        if (!emp) return;
+
+        // Correctly set the ID tracking field and UI field
+        document.getElementById("editEmployeeOriginalId").value = emp.id;
+
+        const idField = document.getElementById("newEmpId");
+        idField.value = emp.id;
+        idField.disabled = true;
+
+        document.getElementById("newEmpName").value = emp.name;
+        document.getElementById("newEmpAge").value = emp.age || "";
+        document.getElementById("newEmpContact").value = emp.contact || "";
+        document.getElementById("newEmpAccount").value = emp.account || "";
+
+        document.getElementById("employeeFormTitle").innerText =
+          "Edit Employee: " + emp.name;
+        document.getElementById("employeeSubmitBtn").innerText =
+          "Update Employee";
+        document.getElementById("employeeSubmitBtn").onclick =
+          updateEmployeeData;
+        document.getElementById("employeeCancelBtn").style.display =
+          "inline-block";
+
+        document
+          .getElementById("employeeFormContainer")
+          .scrollIntoView({ behavior: "smooth" });
+      }
+
+      function cancelEmployeeEdit() {
+        const idField = document.getElementById("newEmpId");
+        idField.disabled = false;
+        idField.value = "";
+
+        document.getElementById("editEmployeeOriginalId").value = "";
+
+        [
+          "newEmpName",
+          "newEmpAge",
+          "newEmpContact",
+          "newEmpAccount",
+          "newEmpPhoto",
+          "newEmpAadhar",
+        ].forEach((id) => (document.getElementById(id).value = ""));
+
+        document.getElementById("employeeFormTitle").innerText =
+          "Register New Employee";
+        document.getElementById("employeeSubmitBtn").innerText = "Add Employee";
+        document.getElementById("employeeSubmitBtn").onclick = addEmployee;
+        document.getElementById("employeeCancelBtn").style.display = "none";
+      }
+
+      async function updateEmployeeData() {
+        const originalId = document.getElementById(
+          "editEmployeeOriginalId",
+        ).value;
+        const empIndex = employees.findIndex((e) => e.id === originalId);
+
+        if (empIndex === -1) {
+          alert("Error: Employee not found.");
+          return;
+        }
+
+        const photoFile = document.getElementById("newEmpPhoto").files[0];
+        const aadharFile = document.getElementById("newEmpAadhar").files[0];
+
+        let photoData = employees[empIndex].photo;
+        let aadharData = employees[empIndex].aadhar;
+
+        if (photoFile) photoData = await getBase64(photoFile);
+        if (aadharFile) aadharData = await getBase64(aadharFile);
+
+        employees[empIndex] = {
+          ...employees[empIndex],
+          name: document.getElementById("newEmpName").value.trim(),
+          age: parseInt(document.getElementById("newEmpAge").value),
+          contact: document.getElementById("newEmpContact").value.trim(),
+          account: document.getElementById("newEmpAccount").value.trim(),
+          photo: photoData,
+          aadhar: aadharData,
+        };
+
+        saveToLocalStorage();
+        cancelEmployeeEdit();
+        renderAdminPanel();
+        alert("Employee updated successfully!");
       }
 
       function deleteEmployee(id) {
@@ -1329,12 +1613,24 @@
           const globalIdx = expenseRecords.indexOf(rec);
           const isAdmin = currentUserRole === "Administrator";
 
+          const ceoHasData = Number(rec.ceo) > 0 || rec.ceoRec;
+          const supHasData = Number(rec.sup) > 0 || rec.supRec;
+
           tbody.innerHTML += `
                     <tr style="background-color: white;">
                         <td style="padding: 12px; border: 1px solid #ddd;"><input type="date" value="${rec.date}" onchange="updateExpense(${globalIdx}, 'date', this.value)" ${!isAdmin ? "disabled" : ""} style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"></td>
-                        <td style="padding: 12px; border: 1px solid #ddd;"><input type="number" value="${rec.ceo}" onchange="updateExpense(${globalIdx}, 'ceo', this.value)" ${!isAdmin && currentUserRole !== "CEO" ? "disabled" : ""} style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;"></td>
-                        <td style="padding: 12px; border: 1px solid #ddd;"><input type="number" value="${rec.sup}" onchange="updateExpense(${globalIdx}, 'sup', this.value)" ${!isAdmin && currentUserRole !== "Supervisor" ? "disabled" : ""} style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;"></td>
-                        <td style="padding: 12px; border: 1px solid #ddd;"><input type="number" value="${rec.adm}" onchange="updateExpense(${globalIdx}, 'adm', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;"></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">
+                            <input type="number" value="${rec.ceo}" onchange="updateExpense(${globalIdx}, 'ceo', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                            <input type="text" placeholder="Rec. #" value="${rec.ceoRec || ""}" onchange="updateExpense(${globalIdx}, 'ceoRec', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                        </td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">
+                            <input type="number" value="${rec.sup}" onchange="updateExpense(${globalIdx}, 'sup', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                            <input type="text" placeholder="Rec. #" value="${rec.supRec || ""}" onchange="updateExpense(${globalIdx}, 'supRec', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                        </td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">
+                            <input type="number" value="${rec.adm}" onchange="updateExpense(${globalIdx}, 'adm', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                            <input type="text" placeholder="Rec. #" value="${rec.admRec || ""}" onchange="updateExpense(${globalIdx}, 'admRec', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                        </td>
                         <td style="padding: 12px; border: 1px solid #ddd;">${isAdmin ? `<button onclick="deleteExpense(${globalIdx})" style="background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">×</button>` : "-"}</td>
                     </tr>`;
           totalCEO += Number(rec.ceo);
@@ -1347,7 +1643,15 @@
 
       function addExpenseRow() {
         const today = new Date().toISOString().split("T")[0];
-        expenseRecords.push({ date: today, ceo: 0, sup: 0, adm: 0 });
+        expenseRecords.push({
+          date: today,
+          ceo: 0,
+          ceoRec: "",
+          sup: 0,
+          supRec: "",
+          adm: 0,
+          admRec: "",
+        });
         saveToLocalStorage();
         renderExpenses();
       }
@@ -1382,7 +1686,6 @@
           month: "long",
         });
 
-        // Filter and sort the data
         const filtered = expenseRecords
           .filter((r) => r.date.startsWith(filter))
           .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1392,7 +1695,6 @@
           return;
         }
 
-        // Header
         doc.setFontSize(18);
         doc.setTextColor(44, 62, 80);
         doc.text("RAM PARKASH INTERIOR", 105, 15, { align: "center" });
@@ -1405,7 +1707,6 @@
           { align: "center" },
         );
 
-        // Table Data Preparation
         let totalCEO = 0,
           totalSup = 0,
           totalAdmin = 0;
@@ -1415,13 +1716,12 @@
           totalAdmin += Number(rec.adm);
           return [
             rec.date,
-            `Rs. ${rec.ceo}`,
-            `Rs. ${rec.sup}`,
-            `Rs. ${rec.adm}`,
+            `Rs. ${rec.ceo} (${rec.ceoRec || "-"})`,
+            `Rs. ${rec.sup} (${rec.supRec || "-"})`,
+            `Rs. ${rec.adm} (${rec.admRec || "-"})`,
           ];
         });
 
-        // Add Totals Row to the end of the table
         tableData.push([
           {
             content: "TOTALS",
@@ -1441,28 +1741,24 @@
           },
         ]);
 
-        // Generate Table
         doc.autoTable({
           startY: 35,
           head: [
-            ["Date", "CEO Expenses", "Supervisor Expenses", "Admin Expenses"],
+            [
+              "Date",
+              "CEO (Exp/Rec)",
+              "Supervisor (Exp/Rec)",
+              "Admin (Exp/Rec)",
+            ],
           ],
           body: tableData,
           theme: "grid",
           headStyles: { fillColor: [44, 62, 80], halign: "center" },
-          columnStyles: {
-            0: { halign: "left" },
-            1: { halign: "right" },
-            2: { halign: "right" },
-            3: { halign: "right" },
-          },
         });
 
-        // Save the PDF
         doc.save(`Expense_Report_${monthName}_${year}.pdf`);
       }
 
-      // --- SESSION PERSISTENCE ---
       window.onload = () => {
         const savedRole = sessionStorage.getItem("rp_auth_role");
         if (savedRole) {
