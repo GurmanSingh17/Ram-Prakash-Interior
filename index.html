@@ -915,11 +915,18 @@
 
       // --- CALCULATION LOGIC FOR TIME/DAYS ---
       function calculateDayAndWage(empId) {
-        const entry = document.getElementById(`entry-${empId}`).value;
-        const exit = document.getElementById(`exit-${empId}`).value;
-        const status = document.getElementById(`status-${empId}`).value;
+        const entryElement = document.getElementById(`entry-${empId}`);
+        const exitElement = document.getElementById(`exit-${empId}`);
+        const statusElement = document.getElementById(`status-${empId}`);
 
-        // Change: Allow calculation if status is "Leave"
+        // Ensure elements exist before reading values
+        if (!entryElement || !exitElement || !statusElement)
+          return { dayCount: 0 };
+
+        const entry = entryElement.value;
+        const exit = exitElement.value;
+        const status = statusElement.value;
+
         if ((status !== "Present" && status !== "Leave") || !entry || !exit) {
           return { dayCount: 0 };
         }
@@ -928,7 +935,7 @@
         const endTime = new Date(`2000-01-01T${exit}`);
         let diffHours = (endTime - startTime) / (1000 * 60 * 60);
 
-        if (diffHours < 0) diffHours += 24; // Handle overnight shifts
+        if (diffHours < 0) diffHours += 24;
 
         let dayMultiplier = 0;
         if (diffHours >= 15) dayMultiplier = 2;
@@ -942,7 +949,9 @@
       // --- CORE RENDERING ---
       function renderEmployeeList() {
         const today = new Date().toDateString();
-        document.getElementById("currentDate").innerText = today;
+        const dateElement = document.getElementById("currentDate");
+        if (dateElement) dateElement.innerText = today;
+
         const tbody = document.getElementById("employeeListBody");
 
         if (employees.length === 0) {
@@ -954,77 +963,95 @@
           .filter((p) => p.status === "running")
           .map((p) => p.name);
 
+        // Identify if the user is an Admin
+        const isAdmin = currentUserRole === "Administrator";
+
         tbody.innerHTML = employees
           .map((emp) => {
-            // FIX: Added '|| []' to prevent crashing on new employees
             const h =
               (emp.attendanceHistory || []).find((rec) => rec.date === today) ||
               {};
             const statusVal = h.status || "Present";
 
+            /** * LOCK LOGIC:
+             * If a record for 'today' exists (h.date is present) AND the user is NOT an admin,
+             * we set isLocked to true to disable the inputs.
+             */
+            const isLocked = h.date && !isAdmin;
+
             return `
-                    <tr>
-                        <td>#${emp.id}</td>
-                        <td><strong>${emp.name}</strong></td>
-                        <td>
-                            <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')">
-                                <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
-                                <option value="Absent" ${statusVal === "Absent" ? "selected" : ""}>Absent</option>
-                                <option value="Leave" ${statusVal === "Leave" ? "selected" : ""}>Leave</option>
-                            </select>
-                        </td>
-                        <td><input type="time" class="time-input" id="entry-${emp.id}" value="${h.entry || "09:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
-                        <td><input type="time" class="time-input" id="exit-${emp.id}" value="${h.exit || "18:00"}" onchange="calculateDayAndWage('${emp.id}')"></td>
-                        <td>
-                            ₹ <input type="number" 
-                                    id="manual-wage-${emp.id}" 
-                                    value="${h.pay || ""}" 
-                                    placeholder="Enter Wage"
-                                    ${h.pay && currentUserRole !== "Administrator" ? "disabled" : ""} 
-                                    style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${h.pay && currentUserRole !== "Administrator" ? "#eee" : "white"};">
-                        </td>
-                        <td>
-                            ${
-                              currentUserRole === "Administrator"
-                                ? `
-                            <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
-                                <option value="">Unassigned</option>
-                                ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
-                            </select>
-                            `
-                                : `<span>${emp.currentProject || "Unassigned"}</span>`
-                            }
-                        </td>
-                        <td>
-                            ${
-                              currentUserRole === "Administrator"
-                                ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
-                                : `<span style="color: #999; font-size: 0.8em;">Locked</span>`
-                            }
-                        </td>
-                    </tr>
-                `;
+                <tr>
+                    <td>#${emp.id}</td>
+                    <td><strong>${emp.name}</strong></td>
+                    <td>
+                        <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
+                            <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
+                            <option value="Absent" ${statusVal === "Absent" ? "selected" : ""}>Absent</option>
+                            <option value="Leave" ${statusVal === "Leave" ? "selected" : ""}>Leave</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="time" class="time-input" id="entry-${emp.id}" 
+                        value="${h.entry || "09:00"}" 
+                        onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
+                    </td>
+                    <td>
+                        <input type="time" class="time-input" id="exit-${emp.id}" 
+                        value="${h.exit || "18:00"}" 
+                        onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
+                    </td>
+                    <td>
+                        ₹ <input type="number" 
+                                id="manual-wage-${emp.id}" 
+                                value="${h.pay || ""}" 
+                                placeholder="Enter Wage"
+                                ${(h.pay || isLocked) && !isAdmin ? "disabled" : ""} 
+                                style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${(h.pay || isLocked) && !isAdmin ? "#eee" : "white"};">
+                    </td>
+                    <td>
+                        ${
+                          isAdmin
+                            ? `
+                        <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
+                            <option value="">Unassigned</option>
+                            ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
+                        </select>
+                        `
+                            : `<span>${emp.currentProject || "Unassigned"}</span>`
+                        }
+                    </td>
+                    <td>
+                        ${
+                          isAdmin
+                            ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
+                            : `<span style="color: #999; font-size: 0.8em;">${isLocked ? "🔒 Locked" : "Editable"}</span>`
+                        }
+                    </td>
+                </tr>
+            `;
           })
           .join("");
       }
 
       function saveAttendance() {
         const today = new Date().toDateString();
+
         employees.forEach((emp) => {
           const status = document.getElementById(`status-${emp.id}`).value;
           const entry = document.getElementById(`entry-${emp.id}`).value;
           const exit = document.getElementById(`exit-${emp.id}`).value;
+          const wageInput = document.getElementById(`manual-wage-${emp.id}`);
+          const manualWage = parseInt(wageInput.value) || 0;
+
+          // Calculate the day count (multiplier) for history
           const results = calculateDayAndWage(emp.id);
 
-          const manualWageInput = document.getElementById(
-            `manual-wage-${emp.id}`,
-          );
-          const manualWage = parseInt(manualWageInput.value) || 0;
-
-          emp.attendanceHistory = emp.attendanceHistory.filter(
+          // Remove any existing entry for today to avoid duplicates
+          emp.attendanceHistory = (emp.attendanceHistory || []).filter(
             (h) => h.date !== today,
           );
 
+          // Push the new record
           emp.attendanceHistory.push({
             date: today,
             status: status,
@@ -1034,8 +1061,13 @@
             dayCount: results ? results.dayCount : 0,
           });
         });
+
+        // Sync to Firebase Cloud
         saveToLocalStorage();
-        alert("Attendance and Wages saved for today!");
+
+        alert("Attendance Saved and Locked!");
+
+        // CRITICAL: Re-run the render function to apply the 'disabled' tags immediately
         renderEmployeeList();
       }
 
