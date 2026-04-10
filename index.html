@@ -320,6 +320,25 @@
         color: #c0392b;
         font-weight: bold;
       }
+
+      /* Inline Edit Styles */
+      .edit-input-sm {
+        width: 100px;
+        padding: 4px;
+        border: 1px solid #f39c12;
+        border-radius: 4px;
+        font-size: 0.85em;
+        margin-bottom: 2px;
+      }
+      .btn-save-sm {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -385,7 +404,7 @@
             <thead>
               <tr>
                 <th>Emp ID</th>
-                <th>Employee Name</th>
+                <th>Employee Details</th>
                 <th>Status</th>
                 <th>Entry Time</th>
                 <th>Exit Time</th>
@@ -446,7 +465,7 @@
           <div class="admin-form" id="projectFormContainer">
             <h3 id="projectFormTitle">Create New Project</h3>
             <input type="hidden" id="editProjectOriginalName" />
-            <input type="text" id="newProjInvoice" placeholder="Invoice No." />
+            <input type="text" id="newProjInvoice" placeholder="Project No." />
             <input type="text" id="newProjCompany" placeholder="Company Name" />
             <input type="text" id="newProjectName" placeholder="Project Name" />
             <input
@@ -493,6 +512,12 @@
               id="newEmpAccount"
               placeholder="Bank Account No."
             />
+            <input
+              type="text"
+              id="newEmpBankName"
+              placeholder="Account Holder Name"
+            />
+            <input type="text" id="newEmpIFSC" placeholder="IFSC Code" />
             <div style="margin: 10px 5px; font-size: 0.9em">
               <label>Employee Photo:</label><br />
               <input
@@ -555,7 +580,7 @@
           <table style="font-size: 0.85em">
             <thead>
               <tr>
-                <th>Inv / Co. / Proj</th>
+                <th>Proj No / Co. / Proj</th>
                 <th>Finances (Total/Rec./Left)</th>
                 <th>Status</th>
                 <th>Action</th>
@@ -575,7 +600,7 @@
                 <th>Name</th>
                 <th>Age</th>
                 <th>Contact</th>
-                <th>Bank A/C</th>
+                <th>Bank Details</th>
                 <th>Project</th>
                 <th>Aadhar Card</th>
                 <th>Action</th>
@@ -963,8 +988,9 @@
           .filter((p) => p.status === "running")
           .map((p) => p.name);
 
-        // Identify if the user is an Admin
         const isAdmin = currentUserRole === "Administrator";
+        const isCEOOrSupervisor =
+          currentUserRole === "CEO" || currentUserRole === "Supervisor";
 
         tbody.innerHTML = employees
           .map((emp) => {
@@ -973,16 +999,16 @@
               {};
             const statusVal = h.status || "Present";
 
-            /** * LOCK LOGIC:
-             * If a record for 'today' exists (h.date is present) AND the user is NOT an admin,
-             * we set isLocked to true to disable the inputs.
-             */
-            const isLocked = h.date && !isAdmin;
+            // CEO and Supervisor bypass the lock for attendance data, but can no longer edit basic details
+            const isLocked = h.date && !isAdmin && !isCEOOrSupervisor;
 
             return `
-                <tr>
+                <tr id="row-${emp.id}">
                     <td>#${emp.id}</td>
-                    <td><strong>${emp.name}</strong></td>
+                    <td id="details-cell-${emp.id}">
+                        <strong>${emp.name}</strong><br>
+                        <small>Age: ${emp.age || "N/A"} | ${emp.contact || "No Contact"}</small>
+                    </td>
                     <td>
                         <select id="status-${emp.id}" onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
                             <option value="Present" ${statusVal === "Present" ? "selected" : ""}>Present</option>
@@ -991,22 +1017,22 @@
                         </select>
                     </td>
                     <td>
-                        <input type="time" class="time-input" id="entry-${emp.id}" 
-                        value="${h.entry || "09:00"}" 
+                        <input type="time" class="time-input" id="entry-${emp.id}" 
+                        value="${h.entry || "09:00"}" 
                         onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
                     </td>
                     <td>
-                        <input type="time" class="time-input" id="exit-${emp.id}" 
-                        value="${h.exit || "18:00"}" 
+                        <input type="time" class="time-input" id="exit-${emp.id}" 
+                        value="${h.exit || "18:00"}" 
                         onchange="calculateDayAndWage('${emp.id}')" ${isLocked ? "disabled" : ""}>
                     </td>
                     <td>
-                        ₹ <input type="number" 
-                                id="manual-wage-${emp.id}" 
-                                value="${h.pay || ""}" 
+                        ₹ <input type="number" 
+                                id="manual-wage-${emp.id}" 
+                                value="${h.pay || ""}" 
                                 placeholder="Enter Wage"
-                                ${(h.pay || isLocked) && !isAdmin ? "disabled" : ""} 
-                                style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${(h.pay || isLocked) && !isAdmin ? "#eee" : "white"};">
+                                ${isLocked ? "disabled" : ""} 
+                                style="width: 100px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px; background: ${isLocked ? "#eee" : "white"};">
                     </td>
                     <td>
                         ${
@@ -1015,17 +1041,14 @@
                         <select id="proj-${emp.id}" onchange="updateProject('${emp.id}', this.value)">
                             <option value="">Unassigned</option>
                             ${runningProjects.map((p) => `<option value="${p}" ${emp.currentProject === p ? "selected" : ""}>${p}</option>`).join("")}
-                        </select>
-                        `
+                        </select>`
                             : `<span>${emp.currentProject || "Unassigned"}</span>`
                         }
                     </td>
                     <td>
-                        ${
-                          isAdmin
-                            ? `<button onclick="viewEmployee('${emp.id}')">History</button>`
-                            : `<span style="color: #999; font-size: 0.8em;">${isLocked ? "🔒 Locked" : "Editable"}</span>`
-                        }
+                        ${isAdmin ? `<button onclick="viewEmployee('${emp.id}')">History</button>` : ""}
+                        ${!isAdmin && isLocked ? "🔒 Locked" : ""}
+                        ${!isAdmin && !isLocked && isCEOOrSupervisor ? "<em>Editable</em>" : ""}
                     </td>
                 </tr>
             `;
@@ -1085,10 +1108,10 @@
               const showMoney = currentUserRole !== "Supervisor";
 
               return `<div style="margin-bottom:15px; padding:8px; border-bottom:1px solid #eee;">
-                                <strong>${p.name}</strong> <small>(${p.company || "No Company"})</small>
-                                ${showMoney ? `<div class="money-tag">Inv: ${p.invoice || "N/A"} | Total: ₹${(p.totalAmt || 0).toLocaleString()} | Rec: ₹${(p.recAmt || 0).toLocaleString()} | <span class="money-left">Left: ₹${left.toLocaleString()}</span></div>` : ""}
-                                ${status === "running" ? `<small>${workers.length}/10 Workers: ${workers.map((w) => w.name).join(", ")}</small>` : ""}
-                            </div>`;
+                                        <strong>${p.name}</strong> <small>(${p.company || "No Company"})</small>
+                                        ${showMoney ? `<div class="money-tag">Proj No: ${p.invoice || "N/A"} | Total: ₹${(p.totalAmt || 0).toLocaleString()} | Rec: ₹${(p.recAmt || 0).toLocaleString()} | <span class="money-left">Left: ₹${left.toLocaleString()}</span></div>` : ""}
+                                        ${status === "running" ? `<small>${workers.length}/10 Workers: ${workers.map((w) => w.name).join(", ")}</small>` : ""}
+                                    </div>`;
             })
             .join("");
         };
@@ -1107,7 +1130,6 @@
           return;
         }
 
-        // Find the employee from the live cloud array
         const emp = employees.find((e) => e.id === id);
         if (!emp) {
           alert("Employee not found.");
@@ -1124,7 +1146,6 @@
           month: "long",
         });
 
-        // Safe check for attendance history
         const history = emp.attendanceHistory || [];
         const filteredHistory = history
           .filter((h) => {
@@ -1142,7 +1163,6 @@
           0,
         );
 
-        // Safe check for payments
         const payments = emp.payments || [];
         const filteredPayments = payments.filter(
           (p) => p.month === selectedMonth,
@@ -1154,102 +1174,120 @@
         const balance = totalEarnings - totalPaid;
 
         const content = `
-                <div style="background: #ecf0f1; padding: 20px; border-radius: 8px; margin: 15px 0;">
-                    <div class="profile-header">
-                        <img src="${emp.photo || "https://via.placeholder.com/100"}" class="main-profile-img">
-                        <div>
-                            <h2>${emp.name}</h2>
-                            <p><strong>Employee ID:</strong> #${emp.id}</p>
-                            <p><strong>Age:</strong> ${emp.age || "N/A"} | <strong>Contact:</strong> ${emp.contact || "N/A"}</p>
-                            <p><strong>Bank Account No:</strong> ${emp.account || "Not provided"}</p>
-                            <p><strong>Current Project:</strong> ${emp.currentProject || "Unassigned"}</p>
-                            <p><strong>Month Stats:</strong> Total Days: ${totalDays.toFixed(2)} | Total Earnings: ₹${totalEarnings.toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div class="emp-docs" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
-                        <div class="doc-item">
-                            <small>Aadhar Card:</small><br>
-                            ${emp.aadhar ? `<img src="${emp.aadhar}" onclick="window.open(this.src)" style="width: 150px; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">` : "<i>No document uploaded</i>"}
-                        </div>
-                    </div>
-                </div>
+              <div style="background: #ecf0f1; padding: 20px; border-radius: 8px; margin: 15px 0;">
+                  <div class="profile-header">
+                      <img src="${emp.photo || "https://via.placeholder.com/100"}" class="main-profile-img">
+                      <div>
+                          <h2>${emp.name}</h2>
+                          <p><strong>Employee ID:</strong> #${emp.id}</p>
+                          <p><strong>Age:</strong> ${emp.age || "N/A"} | <strong>Contact:</strong> ${emp.contact || "N/A"}</p>
+                          <p><strong>Current Project:</strong> ${emp.currentProject || "Unassigned"}</p>
+                          <hr>
+                          <p><strong>Banking Details:</strong></p>
+                          <p>Bank Name: ${emp.bankName || "N/A"}</p>
+                          <p>Account No: ${emp.account || "N/A"}</p>
+                          <p>IFSC Code: ${emp.ifsc || "N/A"}</p>
+                          <hr>
+                          <p><strong>Month Stats:</strong> Total Days: ${totalDays.toFixed(2)} | Total Earnings: ₹${totalEarnings.toLocaleString()}</p>
+                      </div>
+                  </div>
+                  <div class="emp-docs" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                      <div class="doc-item">
+                          <small>Aadhar Card:</small><br>
+                          ${emp.aadhar ? `<img src="${emp.aadhar}" onclick="window.open(this.src)" style="width: 150px; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">` : "<i>No document uploaded</i>"}
+                      </div>
+                  </div>
+              </div>
 
-                <div class="report-controls">
-                    <div>
-                        <label><strong>Select Month:</strong> </label>
-                        <input type="month" id="reportMonth" value="${selectedMonth}" onchange="viewEmployee('${id}', this.value)">
-                    </div>
-                    <button class="btn-pdf" onclick="generatePDF('${id}', '${selectedMonth}')">📥 Download ${monthName} Report (PDF)</button>
-                </div>
+              <div class="report-controls">
+                  <div>
+                      <label><strong>Select Month:</strong> </label>
+                      <input type="month" id="reportMonth" value="${selectedMonth}" onchange="viewEmployee('${id}', this.value)">
+                  </div>
+                  <button class="btn-pdf" onclick="generatePDF('${id}', '${selectedMonth}')">📥 Download ${monthName} Report (PDF)</button>
+              </div>
 
-                <div style="background: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 25px;">
-                    <h3>Payments Ledger - ${monthName} ${year}</h3>
-                    <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-                        <input type="number" id="payAmt" placeholder="Amount Paid">
-                        <select id="payMode">
-                            <option value="Cash">Cash</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Cheque">Cheque</option>
-                            <option value="UPI">UPI</option>
-                        </select>
-                        <button class="btn-add" onclick="addPayment('${id}', '${selectedMonth}')">Add Payment</button>
-                    </div>
-                    <table>
-                        <thead><tr><th>Date</th><th>Amount</th><th>Mode</th><th>Action</th></tr></thead>
-                        <tbody>
-                            ${
-                              filteredPayments.length === 0
-                                ? '<tr><td colspan="4" class="empty-state">No payments recorded</td></tr>'
-                                : filteredPayments
-                                    .map(
-                                      (p, idx) => `<tr>
-                                <td>${p.date}</td>
-                                <td>₹${p.amount}</td>
-                                <td>${p.mode}</td>
-                                <td><button class="btn-del" onclick="deletePayment('${id}', '${selectedMonth}', ${idx})">Delete</button></td>
-                            </tr>`,
-                                    )
-                                    .join("")
-                            }
-                        </tbody>
-                        <tfoot>
-                            <tr style="background:#eee; font-weight:bold;">
-                                <td colspan="2">TOTAL PAID: ₹${totalPaid.toLocaleString()}</td>
-                                <td colspan="2" style="color: ${balance > 0 ? "red" : "green"}">BAL DUE: ₹${balance.toLocaleString()}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+              <div style="background: #f9f9f9; padding: 20px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 25px;">
+                  <h3>Payments Ledger - ${monthName} ${year}</h3>
+                  <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                      <input type="date" id="payDate" placeholder="Date">
+                      <input type="number" id="payAmt" placeholder="Amount Paid">
+                      <select id="payMode">
+                          <option value="Cash">Cash</option>
+                          <option value="Bank Transfer">Bank Transfer</option>
+                          <option value="Cheque">Cheque</option>
+                          <option value="UPI">UPI</option>
+                      </select>
+                      <button class="btn-add" id="paymentSubmitBtn" onclick="addPayment('${id}', '${selectedMonth}')">Add Payment</button>
+                      <button class="btn-del" id="paymentCancelBtn" style="display:none;" onclick="viewEmployee('${id}', '${selectedMonth}')">Cancel</button>
+                  </div>
+                  <table>
+                      <thead><tr><th>Date</th><th>Amount</th><th>Mode</th><th>Action</th></tr></thead>
+                      <tbody>
+                          ${
+                            filteredPayments.length === 0
+                              ? '<tr><td colspan="4" class="empty-state">No payments recorded</td></tr>'
+                              : filteredPayments
+                                  .map((p) => {
+                                    const globalIdx = emp.payments.indexOf(p);
+                                    return `<tr>
+                                  <td>${p.date}</td>
+                                  <td>₹${p.amount.toLocaleString()}</td>
+                                  <td>${p.mode}</td>
+                                  <td>
+                                      <button class="btn-edit" onclick="editPayment('${id}', '${selectedMonth}', ${globalIdx})">✏️</button>
+                                      <button class="btn-del" onclick="deletePayment('${id}', '${selectedMonth}', ${globalIdx})">Delete</button>
+                                  </td>
+                              </tr>`;
+                                  })
+                                  .join("")
+                          }
+                      </tbody>
+                      <tfoot>
+                          <tr style="background:#eee; font-weight:bold;">
+                              <td colspan="2">TOTAL PAID: ₹${totalPaid.toLocaleString()}</td>
+                              <td colspan="2" style="color: ${balance > 0 ? "red" : "green"}">BAL DUE: ₹${balance.toLocaleString()}</td>
+                          </tr>
+                      </tfoot>
+                  </table>
+              </div>
 
-                <h3>Attendance Log for ${monthName} ${year}</h3>
-                <table>
-                    <thead><tr><th>Date</th><th>Status</th><th>Time In/Out</th><th>Day Count</th><th>Earnings</th></tr></thead>
-                    <tbody id="historyTableBody">
-                        ${
-                          filteredHistory.length === 0
-                            ? '<tr><td colspan="5" class="empty-state">No records for this month</td></tr>'
-                            : filteredHistory
-                                .map(
-                                  (h) =>
-                                    `<tr><td>${h.date}</td><td>${h.status}</td><td>${h.entry || "-"}/${h.exit || "-"}</td><td>${parseFloat(h.dayCount || 0).toFixed(2)} days</td><td>₹${(h.pay || 0).toLocaleString()}</td></tr>`,
-                                )
-                                .join("")
-                        }
-                    </tbody>
-                </table>
-            `;
+              <h3>Attendance Log for ${monthName} ${year}</h3>
+              <table>
+                  <thead><tr><th>Date</th><th>Status</th><th>Time In/Out</th><th>Day Count</th><th>Earnings</th></tr></thead>
+                  <tbody id="historyTableBody">
+                      ${
+                        filteredHistory.length === 0
+                          ? '<tr><td colspan="5" class="empty-state">No records for this month</td></tr>'
+                          : filteredHistory
+                              .map(
+                                (h) =>
+                                  `<tr><td>${h.date}</td><td>${h.status}</td><td>${h.entry || "-"}/${h.exit || "-"}</td><td>${parseFloat(h.dayCount || 0).toFixed(2)} days</td><td>₹${(h.pay || 0).toLocaleString()}</td></tr>`,
+                              )
+                              .join("")
+                      }
+                  </tbody>
+              </table>
+          `;
         document.getElementById("personalPortalContent").innerHTML = content;
         showPage("page2");
       }
       function addPayment(empId, month) {
+        const date = document.getElementById("payDate").value;
         const amt = document.getElementById("payAmt").value;
         const mode = document.getElementById("payMode").value;
         if (!amt) return alert("Enter amount");
+
         const emp = employees.find((e) => e.id === empId);
         if (!emp.payments) emp.payments = [];
+
+        const paymentDate = date
+          ? new Date(date).toLocaleDateString()
+          : new Date().toLocaleDateString();
+
         emp.payments.push({
           month: month,
-          date: new Date().toLocaleDateString(),
+          date: paymentDate,
           amount: parseInt(amt),
           mode: mode,
         });
@@ -1257,13 +1295,48 @@
         viewEmployee(empId, month);
       }
 
+      function editPayment(empId, month, paymentIdx) {
+        const emp = employees.find((e) => e.id === empId);
+        const payment = emp.payments[paymentIdx];
+
+        const dateInput = document.getElementById("payDate");
+        const amtInput = document.getElementById("payAmt");
+        const modeSelect = document.getElementById("payMode");
+        const submitBtn = document.getElementById("paymentSubmitBtn");
+        const cancelBtn = document.getElementById("paymentCancelBtn");
+
+        // Convert stored date string back to YYYY-MM-DD for the input
+        if (payment.date) {
+          const dateObj = new Date(payment.date);
+          if (!isNaN(dateObj.getTime())) {
+            dateInput.value = dateObj.toISOString().split("T")[0];
+          }
+        }
+
+        amtInput.value = payment.amount;
+        modeSelect.value = payment.mode;
+
+        submitBtn.innerText = "Update Payment";
+        submitBtn.onclick = function () {
+          const newDate = dateInput.value;
+          payment.date = newDate
+            ? new Date(newDate).toLocaleDateString()
+            : payment.date;
+          payment.amount = parseInt(amtInput.value);
+          payment.mode = modeSelect.value;
+
+          saveToLocalStorage();
+          alert("Payment updated successfully!");
+          viewEmployee(empId, month);
+        };
+        cancelBtn.style.display = "inline-block";
+        amtInput.focus();
+      }
+
       function deletePayment(empId, month, idx) {
         if (!confirm("Delete this record?")) return;
         const emp = employees.find((e) => e.id === empId);
-        const monthPayments = emp.payments.filter((p) => p.month === month);
-        const itemToDelete = monthPayments[idx];
-        emp.payments = emp.payments.filter((p) => p !== itemToDelete);
-
+        emp.payments.splice(idx, 1);
         saveToLocalStorage();
         viewEmployee(empId, month);
       }
@@ -1293,7 +1366,7 @@
           .reduce((sum, p) => sum + p.amount, 0);
         const balance = totalEarned - totalPaid;
 
-        // Header and Details
+        // --- PDF Header ---
         doc.setFontSize(22);
         doc.setTextColor(44, 62, 80);
         doc.text("RAM PARKASH INTERIOR", 105, 15, { align: "center" });
@@ -1301,39 +1374,54 @@
         doc.text(`Monthly Pay Slip: ${monthName} ${year}`, 105, 22, {
           align: "center",
         });
-
         doc.setDrawColor(26, 188, 156);
         doc.line(20, 28, 190, 28);
 
+        // --- Left Section: Employee Details & Photo ---
+        if (emp.photo) {
+          doc.addImage(emp.photo, "JPEG", 20, 32, 25, 25);
+        }
+
         doc.setFontSize(10);
         doc.setTextColor(51, 51, 51);
-        doc.text(`Employee Name: ${emp.name}`, 20, 35);
-        doc.text(`Employee ID: #${emp.id}`, 20, 40);
-        doc.text(`Contact: ${emp.contact || "N/A"}`, 20, 45);
-        doc.text(`Account No: ${emp.account || "N/A"}`, 20, 50);
+        doc.text(`Name: ${emp.name}`, 50, 35);
+        doc.text(`ID: #${emp.id}`, 50, 40);
+        doc.text(`Contact: ${emp.contact || "N/A"}`, 50, 45);
+        doc.text(`Age: ${emp.age || "N/A"}`, 50, 50);
 
-        doc.text(
-          `Total Salary Earned: INR ${totalEarned.toLocaleString()}`,
-          130,
-          35,
-        );
-        doc.text(
-          `Total Payments Made: INR ${totalPaid.toLocaleString()}`,
-          130,
-          40,
-        );
+        // --- Right Section: Bank & Financials ---
+        const rightColX = 110;
+        doc.text(`Bank: ${emp.bankName || "N/A"}`, rightColX, 35);
+        doc.text(`A/C: ${emp.account || "N/A"}`, rightColX, 40);
+        doc.text(`IFSC: ${emp.ifsc || "N/A"}`, rightColX, 45);
+
         doc.setFontSize(11);
-        doc.setTextColor(192, 57, 43); // Red for balance
         doc.text(
-          `NET SETTLEMENT DUE: INR ${balance.toLocaleString()}`,
-          130,
-          48,
+          `Total Earned: INR ${totalEarned.toLocaleString()}`,
+          rightColX,
+          52,
         );
+        doc.setTextColor(192, 57, 43);
+        doc.text(`Total Due: INR ${balance.toLocaleString()}`, rightColX, 58);
 
-        // Attendance Table
+        // --- Aadhar Card Section: Added significant gap here ---
+        let currentY = 65; // Starting Y for the next section
+
+        if (emp.aadhar) {
+          doc.setTextColor(0, 0, 0);
+          doc.setFontSize(10);
+          doc.text("Aadhar Card Copy:", 20, currentY + 5);
+          doc.addImage(emp.aadhar, "JPEG", 20, currentY + 7, 50, 30);
+          var tableTitleY = currentY + 45; // title at Y=110
+        } else {
+          var tableTitleY = currentY + 10; // title at Y=75
+        }
+
+        // --- Attendance Table ---
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(12);
-        doc.text("Daily Attendance & Wages Detail", 20, 60);
+        doc.text("Daily Attendance & Wages Detail", 20, tableTitleY);
+
         const tableData = filteredHistory.map((h) => [
           h.date,
           h.status,
@@ -1341,18 +1429,21 @@
           `${parseFloat(h.dayCount).toFixed(2)}`,
           `Rs. ${h.pay}`,
         ]);
+
         doc.autoTable({
-          startY: 65,
+          startY: tableTitleY + 5,
           head: [["Date", "Status", "In/Out", "Days", "Wages"]],
           body: tableData,
           theme: "striped",
           headStyles: { fillColor: [44, 62, 80] },
+          margin: { top: 10 },
         });
 
-        // Payments Table
+        // --- Payment History ---
         const payData = (emp.payments || [])
           .filter((p) => p.month === monthStr)
           .map((p) => [p.date, p.mode, `Rs. ${p.amount}`]);
+
         if (payData.length > 0) {
           doc.text(
             "Payment History (Installments)",
@@ -1391,19 +1482,19 @@
                 .map((p) => {
                   const left = (p.totalAmt || 0) - (p.recAmt || 0);
                   return `
-                    <tr>
-                        <td><b>#${p.invoice || "N/A"}</b><br>${p.company || "-"}<br>${p.name}</td>
-                        <td>T: ₹${(p.totalAmt || 0).toLocaleString()}<br>R: ₹${(p.recAmt || 0).toLocaleString()}<br><b style="color:red">L: ₹${left.toLocaleString()}</b></td>
-                        <td style="text-transform:capitalize">${p.status}</td>
-                        <td>
-                            <button class="btn-status" onclick="changeStatus('${p.name}', 'running')">R</button>
-                            <button class="btn-status" onclick="changeStatus('${p.name}', 'upcoming')">U</button>
-                            <button class="btn-status" onclick="changeStatus('${p.name}', 'completed')">C</button>
-                            <button class="btn-edit" onclick="editProject('${p.name}')">✏️</button>
-                            <button class="btn-del" onclick="deleteProject('${p.name}')">×</button>
-                        </td>
-                    </tr>
-                    `;
+                                    <tr>
+                                        <td><b>#${p.invoice || "N/A"}</b><br>${p.company || "-"}<br>${p.name}</td>
+                                        <td>T: ₹${(p.totalAmt || 0).toLocaleString()}<br>R: ₹${(p.recAmt || 0).toLocaleString()}<br><b style="color:red">L: ₹${left.toLocaleString()}</b></td>
+                                        <td style="text-transform:capitalize">${p.status}</td>
+                                        <td>
+                                            <button class="btn-status" onclick="changeStatus('${p.name}', 'running')">R</button>
+                                            <button class="btn-status" onclick="changeStatus('${p.name}', 'upcoming')">U</button>
+                                            <button class="btn-status" onclick="changeStatus('${p.name}', 'completed')">C</button>
+                                            <button class="btn-edit" onclick="editProject('${p.name}')">✏️</button>
+                                            <button class="btn-del" onclick="deleteProject('${p.name}')">×</button>
+                                        </td>
+                                    </tr>
+                                    `;
                 })
                 .join("");
 
@@ -1414,25 +1505,29 @@
             : employees
                 .map(
                   (emp) => `
-                <tr>
-                    <td>${emp.id}</td>
-                    <td>
-                        ${emp.photo ? `<img src="${emp.photo}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="window.open(this.src)">` : "No Photo"}
-                    </td>
-                    <td>${emp.name}</td>
-                    <td>${emp.age || "-"}</td>
-                    <td>${emp.contact || "-"}</td>
-                    <td>${emp.account || "-"}</td>
-                    <td>${emp.currentProject || "Unassigned"}</td>
-                    <td>
-                        ${emp.aadhar ? `<img src="${emp.aadhar}" style="width:60px; height:40px; object-fit:contain; border:1px solid #ddd; cursor:pointer;" onclick="window.open(this.src)">` : "No Aadhar"}
-                    </td>
-                    <td>
-                        <button class="btn-edit" onclick="editEmployee('${emp.id}')">✏️</button>
-                        <button class="btn-del" onclick="deleteEmployee('${emp.id}')">Remove</button>
-                    </td>
-                </tr>
-            `,
+                                <tr>
+                                    <td>${emp.id}</td>
+                                    <td>
+                                        ${emp.photo ? `<img src="${emp.photo}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="window.open(this.src)">` : "No Photo"}
+                                    </td>
+                                    <td>${emp.name}</td>
+                                    <td>${emp.age || "-"}</td>
+                                    <td>${emp.contact || "-"}</td>
+                                    <td>
+                                        ${emp.bankName || "N/A"}<br>
+                                        <small>A/C: ${emp.account || "-"}</small><br>
+                                        <small>IFSC: ${emp.ifsc || "-"}</small>
+                                    </td>
+                                    <td>${emp.currentProject || "Unassigned"}</td>
+                                    <td>
+                                        ${emp.aadhar ? `<img src="${emp.aadhar}" style="width:60px; height:40px; object-fit:contain; border:1px solid #ddd; cursor:pointer;" onclick="window.open(this.src)">` : "No Aadhar"}
+                                    </td>
+                                    <td>
+                                        <button class="btn-edit" onclick="editEmployee('${emp.id}')">✏️</button>
+                                        <button class="btn-del" onclick="deleteEmployee('${emp.id}')">Remove</button>
+                                    </td>
+                                </tr>
+                            `,
                 )
                 .join("");
 
@@ -1621,6 +1716,8 @@
       }
 
       async function addEmployee() {
+        const bankName = document.getElementById("newEmpBankName").value.trim();
+        const ifsc = document.getElementById("newEmpIFSC").value.trim();
         const id = document.getElementById("newEmpId").value.trim();
         const name = document.getElementById("newEmpName").value.trim();
         const age = document.getElementById("newEmpAge").value;
@@ -1647,6 +1744,8 @@
             age: parseInt(age),
             contact: contact,
             account: account,
+            bankName: bankName,
+            ifsc: ifsc,
             photo: photoData,
             aadhar: aadharData,
             currentProject: "",
@@ -1659,6 +1758,8 @@
           document.getElementById("newEmpAge").value = "";
           document.getElementById("newEmpContact").value = "";
           document.getElementById("newEmpAccount").value = "";
+          document.getElementById("newEmpBankName").value = "";
+          document.getElementById("newEmpIFSC").value = "";
           document.getElementById("newEmpPhoto").value = "";
           document.getElementById("newEmpAadhar").value = "";
 
@@ -1685,6 +1786,8 @@
         document.getElementById("newEmpAge").value = emp.age || "";
         document.getElementById("newEmpContact").value = emp.contact || "";
         document.getElementById("newEmpAccount").value = emp.account || "";
+        document.getElementById("newEmpBankName").value = emp.bankName || "";
+        document.getElementById("newEmpIFSC").value = emp.ifsc || "";
 
         document.getElementById("employeeFormTitle").innerText =
           "Edit Employee: " + emp.name;
@@ -1707,11 +1810,14 @@
 
         document.getElementById("editEmployeeOriginalId").value = "";
 
+        // Added new bank field IDs to this list to ensure they clear on cancel
         [
           "newEmpName",
           "newEmpAge",
           "newEmpContact",
           "newEmpAccount",
+          "newEmpBankName", // Added
+          "newEmpIFSC", // Added
           "newEmpPhoto",
           "newEmpAadhar",
         ].forEach((id) => (document.getElementById(id).value = ""));
@@ -1749,6 +1855,8 @@
           age: parseInt(document.getElementById("newEmpAge").value),
           contact: document.getElementById("newEmpContact").value.trim(),
           account: document.getElementById("newEmpAccount").value.trim(),
+          bankName: document.getElementById("newEmpBankName").value.trim(),
+          ifsc: document.getElementById("newEmpIFSC").value.trim(),
           photo: photoData,
           aadhar: aadharData,
         };
@@ -1811,22 +1919,22 @@
           const supHasData = Number(rec.sup) > 0 || rec.supRec;
 
           tbody.innerHTML += `
-                    <tr style="background-color: white;">
-                        <td style="padding: 12px; border: 1px solid #ddd;"><input type="date" value="${rec.date}" onchange="updateExpense(${globalIdx}, 'date', this.value)" ${!isAdmin ? "disabled" : ""} style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"></td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">
-                            <input type="number" value="${rec.ceo}" onchange="updateExpense(${globalIdx}, 'ceo', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
-                            <input type="text" placeholder="Rec. #" value="${rec.ceoRec || ""}" onchange="updateExpense(${globalIdx}, 'ceoRec', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
-                        </td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">
-                            <input type="number" value="${rec.sup}" onchange="updateExpense(${globalIdx}, 'sup', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
-                            <input type="text" placeholder="Rec. #" value="${rec.supRec || ""}" onchange="updateExpense(${globalIdx}, 'supRec', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
-                        </td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">
-                            <input type="number" value="${rec.adm}" onchange="updateExpense(${globalIdx}, 'adm', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
-                            <input type="text" placeholder="Rec. #" value="${rec.admRec || ""}" onchange="updateExpense(${globalIdx}, 'admRec', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
-                        </td>
-                        <td style="padding: 12px; border: 1px solid #ddd;">${isAdmin ? `<button onclick="deleteExpense(${globalIdx})" style="background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">×</button>` : "-"}</td>
-                    </tr>`;
+                                    <tr style="background-color: white;">
+                                        <td style="padding: 12px; border: 1px solid #ddd;"><input type="date" value="${rec.date}" onchange="updateExpense(${globalIdx}, 'date', this.value)" ${!isAdmin ? "disabled" : ""} style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"></td>
+                                        <td style="padding: 12px; border: 1px solid #ddd;">
+                                            <input type="number" value="${rec.ceo}" onchange="updateExpense(${globalIdx}, 'ceo', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                                            <input type="text" placeholder="Rec. #" value="${rec.ceoRec || ""}" onchange="updateExpense(${globalIdx}, 'ceoRec', this.value)" ${!isAdmin && (currentUserRole !== "CEO" || ceoHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                                        </td>
+                                        <td style="padding: 12px; border: 1px solid #ddd;">
+                                            <input type="number" value="${rec.sup}" onchange="updateExpense(${globalIdx}, 'sup', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                                            <input type="text" placeholder="Rec. #" value="${rec.supRec || ""}" onchange="updateExpense(${globalIdx}, 'supRec', this.value)" ${!isAdmin && (currentUserRole !== "Supervisor" || supHasData) ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                                        </td>
+                                        <td style="padding: 12px; border: 1px solid #ddd;">
+                                            <input type="number" value="${rec.adm}" onchange="updateExpense(${globalIdx}, 'adm', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #1abc9c; border-radius: 4px;">
+                                            <input type="text" placeholder="Rec. #" value="${rec.admRec || ""}" onchange="updateExpense(${globalIdx}, 'admRec', this.value)" ${!isAdmin ? "disabled" : ""} style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">
+                                        </td>
+                                        <td style="padding: 12px; border: 1px solid #ddd;">${isAdmin ? `<button onclick="deleteExpense(${globalIdx})" style="background: #c0392b; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">×</button>` : "-"}</td>
+                                    </tr>`;
           totalCEO += Number(rec.ceo);
           totalSup += Number(rec.sup);
           totalAdmin += Number(rec.adm);
@@ -1973,20 +2081,20 @@
           const isLocked = !isAdmin && rowHasData;
 
           tbody.innerHTML += `
-            <tr style="background-color: white;">
-                <td><input type="date" value="${rec.date}" onchange="updateMaterial(${globalIdx}, 'date', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="text" value="${rec.itemName || ""}" onchange="updateMaterial(${globalIdx}, 'itemName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="text" value="${rec.qty || ""}" onchange="updateMaterial(${globalIdx}, 'qty', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="text" value="${rec.projectName || ""}" onchange="updateMaterial(${globalIdx}, 'projectName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="text" value="${rec.supplier || ""}" onchange="updateMaterial(${globalIdx}, 'supplier', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="text" value="${rec.receiver || ""}" onchange="updateMaterial(${globalIdx}, 'receiver', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td><input type="number" value="${rec.amount || 0}" onchange="updateMaterial(${globalIdx}, 'amount', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
-                <td>
-                    <input type="file" onchange="uploadMaterialBill(${globalIdx}, this)" ${isLocked ? "disabled" : ""} style="font-size:0.7em">
-                    ${rec.bill ? `<br><button onclick="window.open('${rec.bill}')" style="font-size:0.8em; margin-top:2px">View Bill</button>` : ""}
-                </td>
-                <td style="text-align:center">${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : "-"}</td>
-            </tr>`;
+                                    <tr style="background-color: white;">
+                                        <td><input type="date" value="${rec.date}" onchange="updateMaterial(${globalIdx}, 'date', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="text" value="${rec.itemName || ""}" onchange="updateMaterial(${globalIdx}, 'itemName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="text" value="${rec.qty || ""}" onchange="updateMaterial(${globalIdx}, 'qty', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="text" value="${rec.projectName || ""}" onchange="updateMaterial(${globalIdx}, 'projectName', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="text" value="${rec.supplier || ""}" onchange="updateMaterial(${globalIdx}, 'supplier', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="text" value="${rec.receiver || ""}" onchange="updateMaterial(${globalIdx}, 'receiver', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td><input type="number" value="${rec.amount || 0}" onchange="updateMaterial(${globalIdx}, 'amount', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
+                                        <td>
+                                            <input type="file" onchange="uploadMaterialBill(${globalIdx}, this)" ${isLocked ? "disabled" : ""} style="font-size:0.7em">
+                                            ${rec.bill ? `<br><button onclick="window.open('${rec.bill}')" style="font-size:0.8em; margin-top:2px">View Bill</button>` : ""}
+                                        </td>
+                                        <td style="text-align:center">${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : "-"}</td>
+                                    </tr>`;
           totalAmt += Number(rec.amount || 0);
         });
 
