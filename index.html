@@ -944,7 +944,6 @@
         const exitElement = document.getElementById(`exit-${empId}`);
         const statusElement = document.getElementById(`status-${empId}`);
 
-        // Ensure elements exist before reading values
         if (!entryElement || !exitElement || !statusElement)
           return { dayCount: 0 };
 
@@ -952,7 +951,10 @@
         const exit = exitElement.value;
         const status = statusElement.value;
 
-        if ((status !== "Present" && status !== "Leave") || !entry || !exit) {
+        // Reset display if absent or missing times
+        if (status !== "Present" || !entry || !exit) {
+          const display = document.getElementById(`day-display-${empId}`);
+          if (display) display.innerText = "0";
           return { dayCount: 0 };
         }
 
@@ -960,13 +962,20 @@
         const endTime = new Date(`2000-01-01T${exit}`);
         let diffHours = (endTime - startTime) / (1000 * 60 * 60);
 
+        // Handle overnight shifts if any
         if (diffHours < 0) diffHours += 24;
 
         let dayMultiplier = 0;
+
+        // logic: 9h=1, 12h=1.5, 15h=2
         if (diffHours >= 15) dayMultiplier = 2;
         else if (diffHours >= 12) dayMultiplier = 1.5;
         else if (diffHours >= 9) dayMultiplier = 1;
-        else dayMultiplier = diffHours / 9;
+        else dayMultiplier = Number((diffHours / 9).toFixed(2));
+
+        // Live UI feedback in the "Calculated Day" column
+        const display = document.getElementById(`day-display-${empId}`);
+        if (display) display.innerText = dayMultiplier;
 
         return { dayCount: dayMultiplier };
       }
@@ -1411,6 +1420,7 @@
           doc.setTextColor(0, 0, 0);
           doc.setFontSize(10);
           doc.text("Aadhar Card Copy:", 20, currentY + 5);
+          // Image at Y=72, Height=30. Ends at Y=102.
           doc.addImage(emp.aadhar, "JPEG", 20, currentY + 7, 50, 30);
           var tableTitleY = currentY + 45; // title at Y=110
         } else {
@@ -1431,7 +1441,7 @@
         ]);
 
         doc.autoTable({
-          startY: tableTitleY + 5,
+          startY: tableTitleY + 5, // Starts table 5 units below the title
           head: [["Date", "Status", "In/Out", "Days", "Wages"]],
           body: tableData,
           theme: "striped",
@@ -1440,23 +1450,25 @@
         });
 
         // --- Payment History ---
-        const payData = (emp.payments || [])
-          .filter((p) => p.month === monthStr)
-          .map((p) => [p.date, p.mode, `Rs. ${p.amount}`]);
+        if (emp.payments && emp.payments.length > 0) {
+          const payData = emp.payments
+            .filter((p) => p.month === monthStr)
+            .map((p) => [p.date, p.mode, `Rs. ${p.amount}`]);
 
-        if (payData.length > 0) {
-          doc.text(
-            "Payment History (Installments)",
-            20,
-            doc.lastAutoTable.finalY + 15,
-          );
-          doc.autoTable({
-            startY: doc.lastAutoTable.finalY + 20,
-            head: [["Payment Date", "Mode", "Amount"]],
-            body: payData,
-            theme: "grid",
-            headStyles: { fillColor: [26, 188, 156] },
-          });
+          if (payData.length > 0) {
+            doc.text(
+              "Payment History (Installments)",
+              20,
+              doc.lastAutoTable.finalY + 15,
+            );
+            doc.autoTable({
+              startY: doc.lastAutoTable.finalY + 20,
+              head: [["Payment Date", "Mode", "Amount"]],
+              body: payData,
+              theme: "grid",
+              headStyles: { fillColor: [26, 188, 156] },
+            });
+          }
         }
 
         doc.save(`${emp.name}_Report_${monthName}_${year}.pdf`);
@@ -1816,8 +1828,8 @@
           "newEmpAge",
           "newEmpContact",
           "newEmpAccount",
-          "newEmpBankName", // Added
-          "newEmpIFSC", // Added
+          "newEmpBankName",
+          "newEmpIFSC",
           "newEmpPhoto",
           "newEmpAadhar",
         ].forEach((id) => (document.getElementById(id).value = ""));
@@ -2077,8 +2089,9 @@
         filtered.forEach((rec) => {
           const globalIdx = materialRecords.indexOf(rec);
           const isAdmin = currentUserRole === "Administrator";
-          const rowHasData = rec.itemName || Number(rec.amount) > 0 || rec.bill;
-          const isLocked = !isAdmin && rowHasData;
+
+          // Logic: Lock row for CEO/Supervisor only AFTER they click save.
+          const isLocked = !isAdmin && rec.locked;
 
           tbody.innerHTML += `
                                     <tr style="background-color: white;">
@@ -2093,7 +2106,10 @@
                                             <input type="file" onchange="uploadMaterialBill(${globalIdx}, this)" ${isLocked ? "disabled" : ""} style="font-size:0.7em">
                                             ${rec.bill ? `<br><button onclick="window.open('${rec.bill}')" style="font-size:0.8em; margin-top:2px">View Bill</button>` : ""}
                                         </td>
-                                        <td style="text-align:center">${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : "-"}</td>
+                                        <td style="text-align:center">
+                                            ${!isLocked ? `<button onclick="saveAndLockMaterial(${globalIdx})" style="background:#27ae60; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:5px;">Save</button>` : "🔒"}
+                                            ${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : ""}
+                                        </td>
                                     </tr>`;
           totalAmt += Number(rec.amount || 0);
         });
@@ -2112,6 +2128,7 @@
           receiver: "",
           amount: 0,
           bill: null,
+          locked: false, // New field to handle the lock state
         });
         saveToLocalStorage();
         renderMaterials();
@@ -2120,6 +2137,13 @@
       function updateMaterial(idx, field, val) {
         materialRecords[idx][field] = val;
         saveToLocalStorage();
+      }
+
+      function saveAndLockMaterial(idx) {
+        materialRecords[idx].locked = true;
+        saveToLocalStorage();
+        renderMaterials();
+        alert("Row locked and details saved.");
       }
 
       async function uploadMaterialBill(idx, input) {
