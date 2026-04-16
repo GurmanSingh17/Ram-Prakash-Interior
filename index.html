@@ -3322,6 +3322,8 @@
           reader.readAsDataURL(file);
           reader.onload = () => {
             materialRecords[idx].bill = reader.result;
+            materialRecords[idx].billName = file.name || "bill";
+            materialRecords[idx].billType = file.type || "";
             saveToLocalStorage();
             renderMaterials();
           };
@@ -3342,7 +3344,99 @@
           alert("No bill uploaded for this record.");
           return;
         }
-        window.open(record.bill, "_blank");
+
+        const openViewerWindow = (title, bodyHtml) => {
+          const viewer = window.open("", "_blank");
+          if (!viewer) {
+            alert("Popup blocked. Please allow popups and try again.");
+            return null;
+          }
+          viewer.document.write(`
+            <!doctype html>
+            <html>
+              <head>
+                <title>${title}</title>
+                <style>
+                  body { margin: 0; background: #1f2933; font-family: Arial, sans-serif; }
+                  .frame { width: 100vw; height: 100vh; border: 0; background: white; }
+                  .image-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+                  img { max-width: 100%; max-height: calc(100vh - 32px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+                </style>
+              </head>
+              <body>${bodyHtml}</body>
+            </html>
+          `);
+          viewer.document.close();
+          return viewer;
+        };
+
+        const billType =
+          record.billType ||
+          (record.bill.startsWith("data:application/pdf")
+            ? "application/pdf"
+            : record.bill.startsWith("data:image/")
+              ? "image/*"
+              : "");
+
+        if (billType === "application/pdf") {
+          openViewerWindow(
+            record.billName || "Bill PDF",
+            `<iframe class="frame" src="${record.bill}"></iframe>`,
+          );
+          return;
+        }
+
+        if (
+          billType.startsWith("image/") ||
+          record.bill.startsWith("data:image/")
+        ) {
+          const img = new Image();
+          img.onload = () => {
+            const { jsPDF } = window.jspdf;
+            const orientation = img.width > img.height ? "l" : "p";
+            const doc = new jsPDF(orientation, "mm", "a4");
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const margin = 10;
+            const usableWidth = pageWidth - margin * 2;
+            const usableHeight = pageHeight - margin * 2;
+            const scale = Math.min(
+              usableWidth / img.width,
+              usableHeight / img.height,
+            );
+            const renderWidth = img.width * scale;
+            const renderHeight = img.height * scale;
+            const x = (pageWidth - renderWidth) / 2;
+            const y = (pageHeight - renderHeight) / 2;
+            const imageFormat = record.bill.includes("image/png")
+              ? "PNG"
+              : "JPEG";
+
+            doc.addImage(
+              record.bill,
+              imageFormat,
+              x,
+              y,
+              renderWidth,
+              renderHeight,
+            );
+            const pdfDataUrl = doc.output("datauristring");
+            openViewerWindow(
+              `${record.billName || "Bill"} PDF`,
+              `<iframe class="frame" src="${pdfDataUrl}"></iframe>`,
+            );
+          };
+          img.onerror = () => {
+            openViewerWindow(
+              record.billName || "Bill Image",
+              `<div class="image-wrap"><img src="${record.bill}" alt="Bill" /></div>`,
+            );
+          };
+          img.src = record.bill;
+          return;
+        }
+
+        alert("Unsupported bill format.");
       }
 
       function generateMaterialsPDF() {
