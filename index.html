@@ -76,10 +76,16 @@
 
       .header-title {
         text-align: center;
-        color: #2c3e50;
-        margin-bottom: 20px;
+        color: #1f2d3d;
+        margin-bottom: 24px;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 6px;
+        font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-size: 2.2rem;
+        font-weight: 700;
+        text-shadow:
+          0 2px 0 rgba(255, 255, 255, 0.9),
+          0 4px 12px rgba(44, 62, 80, 0.18);
       }
 
       nav {
@@ -3266,10 +3272,11 @@
                                         <td><input type="number" value="${rec.amount || 0}" onchange="updateMaterial(${globalIdx}, 'amount', this.value)" ${isLocked ? "disabled" : ""} style="width:100%"></td>
                                         <td>
                                             <input type="file" onchange="uploadMaterialBill(${globalIdx}, this)" ${isLocked ? "disabled" : ""} style="font-size:0.7em">
-                                            ${rec.bill ? `<br><button onclick="window.open('${rec.bill}')" style="font-size:0.8em; margin-top:2px">View Bill</button>` : ""}
+                                            ${rec.bill ? `<br><small style="color:#16a085; font-weight:bold;">Bill Uploaded</small>` : ""}
                                         </td>
                                         <td style="text-align:center">
                                             ${!isLocked ? `<button onclick="saveAndLockMaterial(${globalIdx})" style="background:#27ae60; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:5px;">Save</button>` : "🔒"}
+                                            ${isAdmin && rec.bill ? `<button onclick="viewMaterialBill(${globalIdx})" style="background:#2980b9; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:5px;">View Bill</button>` : ""}
                                             ${isAdmin ? `<button onclick="deleteMaterial(${globalIdx})" style="background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>` : ""}
                                         </td>
                                     </tr>`;
@@ -3327,6 +3334,15 @@
           saveToLocalStorage();
           renderMaterials();
         }
+      }
+
+      function viewMaterialBill(idx) {
+        const record = materialRecords[idx];
+        if (!record || !record.bill) {
+          alert("No bill uploaded for this record.");
+          return;
+        }
+        window.open(record.bill, "_blank");
       }
 
       function generateMaterialsPDF() {
