@@ -565,7 +565,7 @@
           <div class="admin-form" id="projectFormContainer">
             <h3 id="projectFormTitle">Create New Project</h3>
             <input type="hidden" id="editProjectOriginalName" />
-            <input type="text" id="newProjInvoice" placeholder="Invoice" />
+            <input type="text" id="newProjInvoice" placeholder="Project No." />
             <input type="text" id="newProjCompany" placeholder="Company Name" />
             <input type="text" id="newProjectName" placeholder="Project Name" />
             <input
@@ -1546,6 +1546,7 @@
             entry: entry,
             exit: exit,
             pay: manualWage,
+            project: emp.currentProject || "Unassigned",
             dayCount: results ? results.dayCount : 0,
           });
         });
@@ -1574,7 +1575,7 @@
 
               return `<div style="margin-bottom:15px; padding:8px; border-bottom:1px solid #eee;">
                                         <strong>${p.name}</strong> <small>(${p.company || "No Company"})</small>
-                                        ${showMoney ? `<div class="money-tag">Invoice: ${p.invoice || "N/A"} | Total: ${formatCurrency(finances.totalGenerated)} | Rec: ${formatCurrency(finances.totalReceived)} | <span class="money-left">Left: ${formatCurrency(finances.settlement)}</span></div>` : ""}
+                                        ${showMoney ? `<div class="money-tag">Proj No: ${p.invoice || "N/A"} | Total: ${formatCurrency(finances.totalGenerated)} | Rec: ${formatCurrency(finances.totalReceived)} | <span class="money-left">Left: ${formatCurrency(finances.settlement)}</span></div>` : ""}
                                         ${status === "running" ? `<small>${workers.length}/10 Workers: ${workers.map((w) => w.name).join(", ")}</small>` : ""}
                                     </div>`;
             })
@@ -1719,19 +1720,25 @@
 
               <h3>Attendance Log for ${monthName} ${year}</h3>
               <table>
-                  <thead><tr><th>Date</th><th>Status</th><th>Time In/Out</th><th>Day Count</th><th>Earnings</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Project</th><th>Status</th><th>Time In/Out</th><th>Day Count</th><th>Earnings</th></tr></thead>
                   <tbody id="historyTableBody">
                       ${
                         filteredHistory.length === 0
-                          ? '<tr><td colspan="5" class="empty-state">No records for this month</td></tr>'
+                          ? '<tr><td colspan="6" class="empty-state">No records for this month</td></tr>'
                           : filteredHistory
                               .map(
                                 (h) =>
-                                  `<tr><td>${h.date}</td><td>${h.status}</td><td>${h.entry || "-"}/${h.exit || "-"}</td><td>${parseFloat(h.dayCount || 0).toFixed(2)} days</td><td>₹${(h.pay || 0).toLocaleString()}</td></tr>`,
+                                  `<tr><td>${h.date}</td><td>${h.project || "Unassigned"}</td><td>${h.status}</td><td>${h.entry || "-"}/${h.exit || "-"}</td><td>${parseFloat(h.dayCount || 0).toFixed(2)} days</td><td>₹${(h.pay || 0).toLocaleString()}</td></tr>`,
                               )
                               .join("")
                       }
                   </tbody>
+                  <tfoot>
+                      <tr style="background:#eee; font-weight:bold;">
+                          <td colspan="5" style="text-align:right">TOTAL WAGES</td>
+                          <td>₹${totalEarnings.toLocaleString()}</td>
+                      </tr>
+                  </tfoot>
               </table>
           `;
         document.getElementById("personalPortalContent").innerHTML = content;
@@ -1890,15 +1897,32 @@
 
         const tableData = filteredHistory.map((h) => [
           h.date,
+          h.project || "Unassigned",
           h.status,
           `${h.entry}/${h.exit}`,
           `${parseFloat(h.dayCount).toFixed(2)}`,
           `Rs. ${h.pay}`,
         ]);
 
+        tableData.push([
+          {
+            content: "TOTAL WAGES",
+            colSpan: 5,
+            styles: {
+              halign: "right",
+              fontStyle: "bold",
+              fillColor: [230, 230, 230],
+            },
+          },
+          {
+            content: `Rs. ${totalEarnings}`,
+            styles: { fontStyle: "bold", fillColor: [230, 230, 230] },
+          },
+        ]);
+
         doc.autoTable({
           startY: tableTitleY + 5, // Starts table 5 units below the title
-          head: [["Date", "Status", "In/Out", "Days", "Wages"]],
+          head: [["Date", "Project", "Status", "In/Out", "Days", "Wages"]],
           body: tableData,
           theme: "striped",
           headStyles: { fillColor: [44, 62, 80] },
@@ -1912,6 +1936,21 @@
             .map((p) => [p.date, p.mode, `Rs. ${p.amount}`]);
 
           if (payData.length > 0) {
+            payData.push([
+              {
+                content: "TOTAL PAID",
+                colSpan: 2,
+                styles: {
+                  halign: "right",
+                  fontStyle: "bold",
+                  fillColor: [230, 230, 230],
+                },
+              },
+              {
+                content: `Rs. ${totalPaid}`,
+                styles: { fontStyle: "bold", fillColor: [230, 230, 230] },
+              },
+            ]);
             doc.text(
               "Payment History (Installments)",
               20,
@@ -2068,6 +2107,7 @@
           entry: entry,
           exit: exit,
           pay: parseInt(wage),
+          project: emp.currentProject || "Unassigned",
           dayCount: dayMultiplier, // Now correctly calculates 1, 1.5, or 2
         });
 
@@ -2271,7 +2311,7 @@
         doc.setTextColor(0);
         doc.text(`Project: ${p.name}`, 20, 30);
         doc.text(`Company: ${p.company || "N/A"}`, 20, 37);
-        doc.text(`System Invoice: ${p.invoice || "N/A"}`, 20, 44);
+        doc.text(`System Proj No: ${p.invoice || "N/A"}`, 20, 44);
 
         // --- Data Table ---
         const tableData = [
@@ -2291,7 +2331,7 @@
           startY: 55,
           head: [
             [
-              "Invoice",
+              "Proj No",
               "Project Name",
               "Total Amt",
               "Received",
@@ -2349,7 +2389,7 @@
 
               return `<div style="margin-bottom:15px; padding:8px; border-bottom:1px solid #eee;">
                                         <strong>${p.name}</strong> <small>(${p.company || "No Company"})</small>
-                                        ${showMoney ? `<div class="money-tag">Invoice: ${p.invoice || "N/A"} | Total: ${formatCurrency(finances.totalGenerated)} | Rec: ${formatCurrency(finances.totalReceived)} | <span class="money-left">Left: ${formatCurrency(finances.settlement)}</span></div>` : ""}
+                                        ${showMoney ? `<div class="money-tag">Proj No: ${p.invoice || "N/A"} | Total: ${formatCurrency(finances.totalGenerated)} | Rec: ${formatCurrency(finances.totalReceived)} | <span class="money-left">Left: ${formatCurrency(finances.settlement)}</span></div>` : ""}
                                         ${status === "running" ? `<small>${workers.length}/10 Workers: ${workers.map((w) => w.name).join(", ")}</small>` : ""}
                                     </div>`;
             })
@@ -2696,14 +2736,14 @@
         doc.setTextColor(0);
         doc.text(`Project: ${p.name}`, 20, 30);
         doc.text(`Company: ${p.company || "N/A"}`, 20, 37);
-        doc.text(`System Invoice: ${p.invoice || "N/A"}`, 20, 44);
+        doc.text(`System Proj No: ${p.invoice || "N/A"}`, 20, 44);
         doc.text(`Status: ${p.status || "N/A"}`, 20, 51);
 
         doc.autoTable({
           startY: 58,
           head: [
             [
-              "Invoice",
+              "Proj No",
               "Project Name",
               "Total Generated",
               "Total Received",
